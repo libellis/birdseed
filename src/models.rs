@@ -56,3 +56,20 @@ pub struct NewQuestion<'a> {
     pub type_: &'a str,
     pub title: &'a str,
 }
+
+#[derive(Queryable)]
+pub struct Choice {
+    pub id: i32,
+    pub question_id: i32,
+    pub content: Option<String>,
+    pub type_: String,
+    pub title: String,
+}
+
+#[derive(Insertable)]
+#[table_name = "choices"]
+pub struct NewChoice<'a> {
+    pub question_id: i32,
+    pub type_: &'a str,
+    pub title: &'a str,
+}

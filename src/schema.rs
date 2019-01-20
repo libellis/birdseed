@@ -1,4 +1,15 @@
 table! {
+    choices (id) {
+        id -> Int4,
+        question_id -> Int4,
+        content -> Nullable<Text>,
+        #[sql_name = "type"]
+        type_ -> Text,
+        title -> Text,
+    }
+}
+
+table! {
     questions (id) {
         id -> Int4,
         survey_id -> Int4,
@@ -32,10 +43,12 @@ table! {
     }
 }
 
+joinable!(choices -> questions (question_id));
 joinable!(questions -> surveys (survey_id));
 joinable!(surveys -> users (author));
 
 allow_tables_to_appear_in_same_query!(
+    choices,
     questions,
     surveys,
     users,

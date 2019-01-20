@@ -21,7 +21,7 @@ use structopt::StructOpt;
 pub mod models;
 pub mod schema;
 
-use self::models::{NewQuestion, NewSurvey, NewUser, Question, Survey, User};
+use self::models::{Choice, NewChoice, NewQuestion, NewSurvey, NewUser, Question, Survey, User};
 
 #[derive(StructOpt, Debug)]
 #[structopt(name = "birdseed", about = "the libellis database seeder")]
@@ -52,7 +52,8 @@ pub fn run(config: Birdseed) -> Result<(), Box<dyn Error>> {
 fn populate_all(conn: &PgConnection, row_count: u32) -> Result<(), Box<dyn Error>> {
     let usernames = populate_users(&conn, row_count).unwrap();
     let survey_ids = populate_surveys(&conn, &usernames, row_count)?;
-    populate_questions(&conn, &survey_ids, row_count)?;
+    let question_ids = populate_questions(&conn, &survey_ids, row_count)?;
+    populate_choices(&conn, &question_ids, row_count)?;
     Ok(())
 }
 
@@ -86,12 +87,32 @@ fn populate_questions(
     conn: &PgConnection,
     survey_ids: &Vec<i32>,
     row_count: u32,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<Vec<i32>, Box<dyn Error>> {
+    let mut question_ids = Vec::new();
     for i in 0..row_count as usize {
         let s_id = survey_ids[i];
         let q_title = format!("{}", fake!(Lorem.sentence(3, 7)));
         let q_type = "multiple".to_string();
-        create_question(conn, s_id, &q_type, &q_title);
+        let question = create_question(conn, s_id, &q_type, &q_title);
+        question_ids.push(question.id);
+    }
+
+    Ok(question_ids)
+}
+
+fn populate_choices(
+    conn: &PgConnection,
+    question_ids: &Vec<i32>,
+    row_count: u32,
+) -> Result<(), Box<dyn Error>> {
+    for i in 0..row_count as usize {
+        let q_id = question_ids[i];
+        // For each question, inject 4 random text choices
+        for _ in 0..4 {
+            let c_title = format!("{}", fake!(Lorem.sentence(1, 4)));
+            let c_type = "text".to_string();
+            create_choice(conn, q_id, &c_type, &c_title);
+        }
     }
 
     Ok(())
@@ -186,6 +207,26 @@ pub fn create_question<'a>(
         .values(&new_question)
         .get_result(conn)
         .expect("Error saving new question")
+}
+
+pub fn create_choice<'a>(
+    conn: &PgConnection,
+    q_id: i32,
+    c_type: &'a str,
+    c_title: &'a str,
+) -> Choice {
+    use schema::choices;
+
+    let new_choice = NewChoice {
+        question_id: q_id,
+        type_: c_type,
+        title: c_title,
+    };
+
+    diesel::insert_into(choices::table)
+        .values(&new_choice)
+        .get_result(conn)
+        .expect("Error saving new choice")
 }
 
 #[cfg(test)]
