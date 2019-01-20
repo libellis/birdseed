@@ -90,7 +90,7 @@ fn populate_questions(
     for i in 0..row_count as usize {
         let s_id = survey_ids[i];
         let q_title = format!("{}", fake!(Lorem.sentence(3, 7)));
-        let q_type = "text".to_string();
+        let q_type = "multiple".to_string();
         create_question(conn, s_id, &q_type, &q_title);
     }
 
