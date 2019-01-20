@@ -1,4 +1,4 @@
-// #![allow(proc_macro_derive_resolution_fallback)]
+#![allow(proc_macro_derive_resolution_fallback)]
 
 #[macro_use]
 extern crate structopt;
@@ -21,7 +21,7 @@ use structopt::StructOpt;
 pub mod models;
 pub mod schema;
 
-use self::models::{NewSurvey, NewUser, Survey, User};
+use self::models::{NewQuestion, NewSurvey, NewUser, Question, Survey, User};
 
 #[derive(StructOpt, Debug)]
 #[structopt(name = "birdseed", about = "the libellis database seeder")]
@@ -51,15 +51,17 @@ pub fn run(config: Birdseed) -> Result<(), Box<dyn Error>> {
 
 fn populate_all(conn: &PgConnection, row_count: u32) -> Result<(), Box<dyn Error>> {
     let usernames = populate_users(&conn, row_count).unwrap();
-    populate_surveys(&conn, &usernames, row_count)?;
+    let survey_ids = populate_surveys(&conn, &usernames, row_count)?;
+    populate_questions(&conn, &survey_ids, row_count)?;
     Ok(())
 }
 
 fn clear_all(conn: &PgConnection) -> Result<(), Box<dyn Error>> {
     use schema::*;
 
-    diesel::delete(users::table).execute(conn);
-    diesel::delete(surveys::table).execute(conn);
+    diesel::delete(questions::table).execute(conn)?;
+    diesel::delete(surveys::table).execute(conn)?;
+    diesel::delete(users::table).execute(conn)?;
 
     Ok(())
 }
@@ -68,11 +70,28 @@ fn populate_surveys(
     conn: &PgConnection,
     authors: &Vec<String>,
     row_count: u32,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<Vec<i32>, Box<dyn Error>> {
+    let mut survey_ids = Vec::new();
     for i in 0..row_count as usize {
         let auth = &authors[i];
         let survey_title = format!("{}", fake!(Lorem.sentence(4, 8)));
-        create_survey(conn, auth, &survey_title);
+        let survey = create_survey(conn, auth, &survey_title);
+        survey_ids.push(survey.id);
+    }
+
+    Ok(survey_ids)
+}
+
+fn populate_questions(
+    conn: &PgConnection,
+    survey_ids: &Vec<i32>,
+    row_count: u32,
+) -> Result<(), Box<dyn Error>> {
+    for i in 0..row_count as usize {
+        let s_id = survey_ids[i];
+        let q_title = format!("{}", fake!(Lorem.sentence(3, 7)));
+        let q_type = "text".to_string();
+        create_question(conn, s_id, &q_type, &q_title);
     }
 
     Ok(())
@@ -147,6 +166,26 @@ pub fn create_survey<'a>(conn: &PgConnection, auth: &'a str, survey_title: &'a s
         .values(&new_survey)
         .get_result(conn)
         .expect("Error saving new survey")
+}
+
+pub fn create_question<'a>(
+    conn: &PgConnection,
+    s_id: i32,
+    q_type: &'a str,
+    q_title: &'a str,
+) -> Question {
+    use schema::questions;
+
+    let new_question = NewQuestion {
+        survey_id: s_id,
+        type_: q_type,
+        title: q_title,
+    };
+
+    diesel::insert_into(questions::table)
+        .values(&new_question)
+        .get_result(conn)
+        .expect("Error saving new question")
 }
 
 #[cfg(test)]
