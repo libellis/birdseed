@@ -1,3 +1,5 @@
+// #![allow(proc_macro_derive_resolution_fallback)]
+
 #[macro_use]
 extern crate structopt;
 
@@ -20,69 +22,84 @@ pub mod models;
 pub mod schema;
 
 use self::models::{NewSurvey, NewUser, Survey, User};
-use self::schema::users::dsl::*;
 
 #[derive(StructOpt, Debug)]
 #[structopt(name = "birdseed", about = "the libellis database seeder")]
 /// You can use birdseed to seed a libellis table with junk data!
-pub struct Config {
-    /// Table name to inject data into
-    #[structopt(long = "table", short = "t")]
-    table: String,
+pub enum Birdseed {
+    #[structopt(name = "feed")]
+    /// Injects random data into all tables
+    Feed {
+        /// How many rows to inject
+        #[structopt(short = "r", long = "rows", default_value = "1000")]
+        row_count: u32,
+    },
 
-    /// How many rows to inject
-    #[structopt(long = "rowcount", short = "r")]
-    row_count: u32,
+    #[structopt(name = "clear")]
+    /// Clears all tables in libellis database
+    Clear,
 }
 
-pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
+pub fn run(config: Birdseed) -> Result<(), Box<dyn Error>> {
     let connection = establish_connection();
-    let surveys_str = String::from("surveys");
-    let users_str = String::from("users");
-    match config.table.to_lowercase() {
-        users_str => populate_users(&connection, config.row_count)?,
-        surveys_str => populate_surveys(config.row_count)?,
-        _ => panic!("That table name doesn't exist!"),
-    };
+
+    match config {
+        Birdseed::Feed { row_count } => populate_all(&connection, row_count),
+        Birdseed::Clear => clear_all(&connection),
+    }
+}
+
+fn populate_all(conn: &PgConnection, row_count: u32) -> Result<(), Box<dyn Error>> {
+    let usernames = populate_users(&conn, row_count).unwrap();
+    populate_surveys(&conn, &usernames, row_count)?;
+    Ok(())
+}
+
+fn clear_all(conn: &PgConnection) -> Result<(), Box<dyn Error>> {
+    use schema::*;
+
+    diesel::delete(users::table).execute(conn);
+    diesel::delete(surveys::table).execute(conn);
 
     Ok(())
 }
 
-fn populate_all(conn: &PgConnection, row_count: u32) -> Result<(), Box<dyn Error>> {
-    populate_users(&connection, row_count);
-    populate_surveys(&connection, row_count);
-}
-
 fn populate_surveys(
     conn: &PgConnection,
-    authors: Vec<String>,
+    authors: &Vec<String>,
     row_count: u32,
 ) -> Result<(), Box<dyn Error>> {
-    for i in 0..row_count {
-        let auth = authors[i];
+    for i in 0..row_count as usize {
+        let auth = &authors[i];
         let survey_title = format!("{}", fake!(Lorem.sentence(4, 8)));
-        create_survey(conn, &auth, &survey_title);
+        create_survey(conn, auth, &survey_title);
     }
 
     Ok(())
 }
 
-fn populate_users(conn: &PgConnection, row_count: u32) -> Result<(), Box<dyn Error>> {
+fn populate_users(conn: &PgConnection, row_count: u32) -> Result<Vec<String>, Box<dyn Error>> {
+    let mut usernames = Vec::new();
     for _ in 0..row_count {
-        let user = format!("{}", fake!(Internet.user_name));
+        let user = format!(
+            "{}{}",
+            fake!(Internet.user_name),
+            fake!(Number.between(90, 9999))
+        );
         let pw = format!(
             "{}{}",
             fake!(Name.name),
             fake!(Number.between(10000, 99999))
         );
-        let em = format!("{}", fake!(Internet.safe_email));
+        let em = format!("{}@gmail.com", user);
         let first = format!("{}", fake!(Name.first_name));
         let last = format!("{}", fake!(Name.last_name));
 
         create_user(conn, &user, &pw, &em, &first, &last);
+        usernames.push(user);
     }
 
-    Ok(())
+    Ok(usernames)
 }
 
 pub fn establish_connection() -> PgConnection {

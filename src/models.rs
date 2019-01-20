@@ -1,4 +1,4 @@
-use super::schema::users;
+use super::schema::*;
 use std::time::SystemTime;
 
 #[derive(Queryable)]
@@ -31,7 +31,7 @@ pub struct Survey {
     pub description: Option<String>,
     pub anonymous: bool,
     pub published: bool,
-    pub date_posted: Option<SystemTime>,
+    pub date_posted: SystemTime,
 }
 
 #[derive(Insertable)]
