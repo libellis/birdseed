@@ -5,6 +5,7 @@ authors = ["Peter Farr <Peter@PrismaPhonic.com>"]
 description = "birdseed enables you to seed a libellis database with fake data, clear all tables, or rebuild all tables per the current embedded migrations"
 keywords = ["birdseed", "libellis", "seeding", "database", "postgres"]
 repository = "https://github.com/libellis/birdseed"
+documentation = "https://libellis.github.io/birdseed/birdseed/index.html"
 license = "MIT"
 edition = "2018"
 include = [
