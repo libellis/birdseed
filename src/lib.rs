@@ -1,7 +1,6 @@
-// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
-// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
-// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
-// option. This file may not be copied, modified, or distributed
+// Licensed under the the MIT license
+// <LICENSE-MIT or http://opensource.org/licenses/MIT>.
+// This file may not be copied, modified, or distributed
 // except according to those terms.
 
 #![allow(proc_macro_derive_resolution_fallback)]
@@ -107,11 +106,8 @@ use rand::thread_rng;
 
 use indicatif::{ProgressBar, ProgressStyle};
 
-/// re-export of diesel models
-pub mod models;
-
-/// re-export of diesel schema
-pub mod schema;
+mod models;
+mod schema;
 
 embed_migrations!("./migrations");
 
@@ -178,34 +174,75 @@ fn populate_all(conn: &PgConnection, row_count: u32) -> Result<(), Box<dyn Error
     Ok(())
 }
 
-// Clears all tables in appropraite order
+// Clears all tables in appropriate order and increments a progress bar with
+// custom start and completion messages
 fn clear_all(conn: &PgConnection) -> Result<(), Box<dyn Error>> {
-    use schema::*;
+    use self::schema::*;
+
+    println!("\r\n                  🐦 Clearing all Tables 🐦\r\n");
+
+    let bar = ProgressBar::new(5);
+    bar.set_style(
+        ProgressStyle::default_bar()
+            .template("[{elapsed_precise}] {bar:40.cyan/blue} {msg}")
+            .progress_chars("##-"),
+    );
 
     diesel::delete(votes::table).execute(conn)?;
+    bar.inc(1);
     diesel::delete(choices::table).execute(conn)?;
+    bar.inc(1);
     diesel::delete(questions::table).execute(conn)?;
+    bar.inc(1);
     diesel::delete(surveys::table).execute(conn)?;
+    bar.inc(1);
     diesel::delete(users::table).execute(conn)?;
+    bar.inc(1);
+
+    bar.finish();
+    println!("\r\n                  🐦 All Tables Cleared! 🐦\r\n");
 
     Ok(())
 }
 
 // Drops all tables from libellis database
+// Note that it's very intentional that we're not dealing with the result ->
+// We don't care if a table doesn't exist, we simply want to attempt to drop
+// ALL regardless so we are ready for a rebuild.  This takes care of situations
+// where a user has manually deleted some but not all of their tables. Open a PR
+// request if you have a better solution in mind.
 fn drop_all(conn: &PgConnection) {
+    let bar = ProgressBar::new(7);
+    bar.set_style(
+        ProgressStyle::default_bar()
+            .template("[{elapsed_precise}] {bar:40.cyan/blue} {msg}")
+            .progress_chars("##-"),
+    );
+
     conn.execute("DROP VIEW users_votes");
+    bar.inc(1);
     conn.execute("DROP TABLE votes");
+    bar.inc(1);
     conn.execute("DROP TABLE choices");
+    bar.inc(1);
     conn.execute("DROP TABLE questions");
+    bar.inc(1);
     conn.execute("DROP TABLE surveys");
+    bar.inc(1);
     conn.execute("DROP TABLE users");
+    bar.inc(1);
     conn.execute("DROP TABLE __diesel_schema_migrations");
+    bar.inc(1);
+    bar.finish();
 }
 
 // Rebuilds all tables per most recent embedded diesel migrations
 fn rebuild(conn: &PgConnection) -> Result<(), Box<dyn Error>> {
+    println!("\r\n                  🐦 Dropping all Tables 🐦\r\n");
     drop_all(conn);
-    embedded_migrations::run(conn)?;
+    println!("\r\n                  🐦 Running Migrations 🐦\r\n");
+    embedded_migrations::run_with_output(conn, &mut std::io::stdout())?;
+    println!("\r\n              🐦 Tables Successfully Rebuilt! 🐦\r\n");
     Ok(())
 }
 
@@ -363,7 +400,7 @@ fn create_user<'a>(
     first: &'a str,
     last: &'a str,
 ) -> User {
-    use schema::users;
+    use self::schema::users;
 
     let new_user = NewUser {
         username: user,
@@ -381,7 +418,7 @@ fn create_user<'a>(
 }
 
 fn create_survey<'a>(conn: &PgConnection, auth: &'a str, survey_title: &'a str) -> Survey {
-    use schema::surveys;
+    use self::schema::surveys;
 
     let new_survey = NewSurvey {
         author: auth,
@@ -400,7 +437,7 @@ fn create_question<'a>(
     q_type: &'a str,
     q_title: &'a str,
 ) -> Question {
-    use schema::questions;
+    use self::schema::questions;
 
     let new_question = NewQuestion {
         survey_id: s_id,
@@ -415,7 +452,7 @@ fn create_question<'a>(
 }
 
 fn create_choice<'a>(conn: &PgConnection, q_id: i32, c_type: &'a str, c_title: &'a str) -> Choice {
-    use schema::choices;
+    use self::schema::choices;
 
     let new_choice = NewChoice {
         question_id: q_id,
@@ -430,7 +467,7 @@ fn create_choice<'a>(conn: &PgConnection, q_id: i32, c_type: &'a str, c_title: &
 }
 
 fn create_vote<'a>(conn: &PgConnection, c_id: i32, name: &'a str, points: i32) -> Vote {
-    use schema::votes;
+    use self::schema::votes;
 
     let new_vote = NewVote {
         choice_id: c_id,
