@@ -10,6 +10,7 @@ extern crate dotenv;
 #[macro_use]
 extern crate fake;
 
+extern crate indicatif;
 extern crate rand;
 
 use diesel::pg::PgConnection;
@@ -22,6 +23,8 @@ use structopt::StructOpt;
 
 use rand::seq::SliceRandom;
 use rand::thread_rng;
+
+use indicatif::{ProgressBar, ProgressStyle};
 
 pub mod models;
 pub mod schema;
@@ -57,17 +60,30 @@ pub fn run(config: Birdseed) -> Result<(), Box<dyn Error>> {
 }
 
 fn populate_all(conn: &PgConnection, row_count: u32) -> Result<(), Box<dyn Error>> {
-    let usernames = populate_users(&conn, row_count).unwrap();
-    let survey_ids = populate_surveys(&conn, &usernames, row_count)?;
-    let question_ids = populate_questions(&conn, &survey_ids, row_count)?;
-    let choice_ids = populate_choices(&conn, &question_ids, row_count)?;
-    populate_votes(&conn, &usernames, &choice_ids)?;
+    println!("\r\n                  🐦 Seeding All Tables 🐦\r\n");
+
+    let bar = ProgressBar::new((row_count * 11) as u64);
+    bar.set_style(
+        ProgressStyle::default_bar()
+            .template("[{elapsed_precise}] {bar:40.cyan/blue} {msg}")
+            .progress_chars("##-"),
+    );
+
+    let usernames = populate_users(&conn, row_count, &bar)?;
+    let survey_ids = populate_surveys(&conn, &usernames, row_count, &bar)?;
+    let question_ids = populate_questions(&conn, &survey_ids, row_count, &bar)?;
+    let choice_ids = populate_choices(&conn, &question_ids, row_count, &bar)?;
+    populate_votes(&conn, &usernames, &choice_ids, &bar)?;
+    bar.finish();
+    println!("\r\n             🐦 Birdseed has finished seeding! 🐦\r\n");
     Ok(())
 }
 
 fn clear_all(conn: &PgConnection) -> Result<(), Box<dyn Error>> {
     use schema::*;
 
+    diesel::delete(votes::table).execute(conn)?;
+    diesel::delete(choices::table).execute(conn)?;
     diesel::delete(questions::table).execute(conn)?;
     diesel::delete(surveys::table).execute(conn)?;
     diesel::delete(users::table).execute(conn)?;
@@ -75,88 +91,13 @@ fn clear_all(conn: &PgConnection) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn populate_surveys(
+fn populate_users(
     conn: &PgConnection,
-    authors: &Vec<String>,
     row_count: u32,
-) -> Result<Vec<i32>, Box<dyn Error>> {
-    let mut survey_ids = Vec::new();
-    for i in 0..row_count as usize {
-        let auth = &authors[i];
-        let survey_title = format!("{}", fake!(Lorem.sentence(4, 8)));
-        let survey = create_survey(conn, auth, &survey_title);
-        survey_ids.push(survey.id);
-    }
-
-    Ok(survey_ids)
-}
-
-fn populate_questions(
-    conn: &PgConnection,
-    survey_ids: &Vec<i32>,
-    row_count: u32,
-) -> Result<Vec<i32>, Box<dyn Error>> {
-    let mut question_ids = Vec::new();
-    for i in 0..row_count as usize {
-        let s_id = survey_ids[i];
-        let q_title = format!("{}", fake!(Lorem.sentence(3, 7)));
-        let q_type = "multiple".to_string();
-        let question = create_question(conn, s_id, &q_type, &q_title);
-        question_ids.push(question.id);
-    }
-
-    Ok(question_ids)
-}
-
-fn populate_choices(
-    conn: &PgConnection,
-    question_ids: &Vec<i32>,
-    row_count: u32,
-) -> Result<Vec<i32>, Box<dyn Error>> {
-    let mut choice_ids = Vec::new();
-    for i in 0..row_count as usize {
-        let q_id = question_ids[i];
-        // For each question, inject 4 random text choices
-        for _ in 0..4 {
-            let c_title = format!("{}", fake!(Lorem.sentence(1, 4)));
-            let c_type = "text".to_string();
-            let choice = create_choice(conn, q_id, &c_type, &c_title);
-            choice_ids.push(choice.id);
-        }
-    }
-
-    Ok(choice_ids)
-}
-
-fn populate_votes(
-    conn: &PgConnection,
-    authors: &Vec<String>,
-    choice_ids: &Vec<i32>,
-) -> Result<(), Box<dyn Error>> {
-    // Create vectors of idx and shuffle them
-    let mut rng = thread_rng();
-    let mut choice_idxs: Vec<usize> = (0..choice_ids.len()).collect();
-    let choice_slice: &mut [usize] = &mut choice_idxs;
-    let mut author_idxs: Vec<usize> = (0..authors.len()).collect();
-    let author_slice: &mut [usize] = &mut author_idxs;
-    choice_slice.shuffle(&mut rng);
-    author_slice.shuffle(&mut rng);
-
-    // For each round up randomize the choice and the author voting
-    // on the choice
-    for i in 0..authors.len() - 1 {
-        let name = &authors[author_slice[i]];
-        for j in 1..=4 {
-            let c_id = choice_ids[choice_slice[(i + 1) * j]];
-            create_vote(conn, c_id, name, 1);
-        }
-    }
-
-    Ok(())
-}
-
-fn populate_users(conn: &PgConnection, row_count: u32) -> Result<Vec<String>, Box<dyn Error>> {
+    bar: &ProgressBar,
+) -> Result<Vec<String>, Box<dyn Error>> {
     let mut usernames = Vec::new();
+    bar.set_message(&format!("Seeding {} users", row_count));
     for _ in 0..row_count {
         let user = format!(
             "{}{}",
@@ -174,9 +115,103 @@ fn populate_users(conn: &PgConnection, row_count: u32) -> Result<Vec<String>, Bo
 
         create_user(conn, &user, &pw, &em, &first, &last);
         usernames.push(user);
+        bar.inc(1);
     }
 
     Ok(usernames)
+}
+
+fn populate_surveys(
+    conn: &PgConnection,
+    authors: &Vec<String>,
+    row_count: u32,
+    bar: &ProgressBar,
+) -> Result<Vec<i32>, Box<dyn Error>> {
+    let mut survey_ids = Vec::new();
+    bar.set_message(&format!("Seeding {} surveys", row_count));
+    for i in 0..row_count as usize {
+        let auth = &authors[i];
+        let survey_title = format!("{}", fake!(Lorem.sentence(4, 8)));
+        let survey = create_survey(conn, auth, &survey_title);
+        survey_ids.push(survey.id);
+        bar.inc(1);
+    }
+
+    Ok(survey_ids)
+}
+
+fn populate_questions(
+    conn: &PgConnection,
+    survey_ids: &Vec<i32>,
+    row_count: u32,
+    bar: &ProgressBar,
+) -> Result<Vec<i32>, Box<dyn Error>> {
+    let mut question_ids = Vec::new();
+    bar.set_message(&format!("Seeding {} questions", row_count));
+    for i in 0..row_count as usize {
+        let s_id = survey_ids[i];
+        let q_title = format!("{}", fake!(Lorem.sentence(3, 7)));
+        let q_type = "multiple".to_string();
+        let question = create_question(conn, s_id, &q_type, &q_title);
+        question_ids.push(question.id);
+        bar.inc(1);
+    }
+
+    Ok(question_ids)
+}
+
+fn populate_choices(
+    conn: &PgConnection,
+    question_ids: &Vec<i32>,
+    row_count: u32,
+    bar: &ProgressBar,
+) -> Result<Vec<i32>, Box<dyn Error>> {
+    let mut choice_ids = Vec::new();
+    bar.set_message(&format!("Seeding {} choices", (row_count * 4)));
+    for i in 0..row_count as usize {
+        let q_id = question_ids[i];
+        // For each question, inject 4 random text choices
+        for _ in 0..4 {
+            let c_title = format!("{}", fake!(Lorem.sentence(1, 4)));
+            let c_type = "text".to_string();
+            let choice = create_choice(conn, q_id, &c_type, &c_title);
+            choice_ids.push(choice.id);
+            bar.inc(1);
+        }
+    }
+
+    Ok(choice_ids)
+}
+
+fn populate_votes(
+    conn: &PgConnection,
+    authors: &Vec<String>,
+    choice_ids: &Vec<i32>,
+    bar: &ProgressBar,
+) -> Result<(), Box<dyn Error>> {
+    bar.set_message(&format!("{} users are voting", (authors.len())));
+
+    // Create vectors of idx and shuffle them
+    let mut rng = thread_rng();
+    let mut choice_idxs: Vec<usize> = (0..choice_ids.len()).collect();
+    let choice_slice: &mut [usize] = &mut choice_idxs;
+    let mut author_idxs: Vec<usize> = (0..authors.len()).collect();
+    let author_slice: &mut [usize] = &mut author_idxs;
+    choice_slice.shuffle(&mut rng);
+    author_slice.shuffle(&mut rng);
+
+    // For each round up randomize the choice and the author voting
+    // on the choice
+    for i in 0..authors.len() - 1 {
+        let name = &authors[author_slice[i]];
+        for j in 1..=4 {
+            let c_id = choice_ids[choice_slice[(i + 1) * j]];
+            create_vote(conn, c_id, name, 1);
+            bar.inc(1);
+        }
+    }
+
+    Ok(())
 }
 
 pub fn establish_connection() -> PgConnection {
