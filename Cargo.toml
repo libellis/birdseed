@@ -1,11 +1,13 @@
 [package]
 name = "birdseed"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Peter Farr <Peter@PrismaPhonic.com>"]
 description = "birdseed enables you to seed a libellis database with fake data, clear all tables, or rebuild all tables per the current embedded migrations"
 keywords = ["birdseed", "libellis", "seeding", "database", "postgres"]
+categories = ["command-line-utilities", "database"]
 repository = "https://github.com/libellis/birdseed"
 documentation = "https://libellis.github.io/birdseed/birdseed/index.html"
+readme = "README.md"
 license = "MIT"
 edition = "2018"
 include = [
@@ -15,6 +17,10 @@ include = [
     "diesel.toml",
     "README.md",
 ]
+
+[badges]
+travis-ci = { repository = "https://travis-ci.org/libellis/birdseed", branch = "master" }
+maintenance = { status = "actively-developed" }
 
 [[bin]]
 doc = false
