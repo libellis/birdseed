@@ -1,0 +1,1 @@
+initSidebarItems({"macro":[["dummy",""],["fake",""]],"mod":[["dummy",""],["faker",""],["helper",""],["locales",""]],"trait":[["Fake",""]]});

@@ -12,7 +12,7 @@
 //!
 //! ## Setup
 //!
-//! You MUST set your DATABASE_URL environment variable to your libellis postgres database.
+//! You MUST set your `DATABASE_URL` environment variable to your libellis postgres database.
 //!
 //! ### Example
 //! ```terminal
@@ -22,19 +22,24 @@
 //! You can optionally set this in a `.env` file in the root folder of this project if you are
 //! running the project from a local folder.
 //!
-//! ## Dependencies
+//! ## Installation
 //!
-//! This project depends on [Diesel](http://diesel.rs/). For the purposes of this data seeder we
-//! only need postgres support. To install diesel with only postgres support we can do that with
-//! the following terminal command:
+//! You may install this in one of two ways. If you have `cargo` installed then it's very easy. If
+//! not, you can install rust and cargo by following this very simple [cargo setup](https://doc.rust-lang.org/cargo/getting-started/installation.html) process.
+//! Once you have cargo installed you can install this terminal application by running:
 //!
 //! ```terminal
-//! $ cargo install diesel_cli --no-default-features --features postgres
+//! $ cargo install birdseed
 //! ```
 //!
-//! This will also help to avoid errors that may crop up if you don't have mysql or sqllite already
-//! installed as diesel will provide support for those out of the box, but error out if you don't
-//! have them already installed.
+//! Optionally you may instead clone this repo and in the root directory build the release version
+//! of this crate:
+//!
+//! ```terminal
+//! $ git clone https://github.com/libellis/birdseed.git
+//! $ cd birdseed
+//! $ cargo build --release
+//! ```
 //!
 //! ## Features
 //!
@@ -121,8 +126,6 @@ use self::models::{
     long_about = "You can use birdseed to seed a libellis db with junk data!"
 )]
 /// You can use birdseed to seed a libellis db with junk data!
-/// You MUST set your DATABASE_URL environment variable to postgres db
-/// Example: $ export DATABASE_URL=postgres://username:password@localhost/libellis
 pub enum Birdseed {
     #[structopt(name = "feed")]
     /// Seeds random data into all tables

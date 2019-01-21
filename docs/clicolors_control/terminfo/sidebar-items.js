@@ -1,0 +1,1 @@
+initSidebarItems({"fn":[["is_atty","Returns `true` if a terminal is connected."],["supports_colors","Returns `true` if colors are supported by this terminal."]]});
