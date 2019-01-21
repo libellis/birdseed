@@ -2,7 +2,23 @@
 name = "birdseed"
 version = "0.1.0"
 authors = ["Peter Farr <Peter@PrismaPhonic.com>"]
+description = "birdseed enables you to seed a libellis database with fake data, clear all tables, or rebuild all tables per the current embedded migrations"
+keywords = ["birdseed", "libellis", "seeding", "database", "postgres"]
+repository = "https://github.com/libellis/birdseed"
+license = "MIT"
 edition = "2018"
+include = [
+    "migrations/*",
+    "**/*.rs",
+    "Cargo.toml",
+    "diesel.toml",
+    "README.md",
+]
+
+[[bin]]
+doc = false
+name = "birdseed"
+path = "src/bin/birdseed.rs"
 
 [dependencies]
 fake = "1.2.2"

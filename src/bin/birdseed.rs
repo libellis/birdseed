@@ -1,4 +1,5 @@
-use birdseed;
+extern crate birdseed;
+
 use structopt::StructOpt;
 
 fn main() {

@@ -7,6 +7,7 @@ sourcesIndex['backtrace_sys'] = {"name":"","dirs":[],"files":["lib.rs"]};
 sourcesIndex['birdseed'] = {"name":"","dirs":[],"files":["lib.rs","models.rs","schema.rs"]};
 sourcesIndex['birdseed'] = {"name":"","dirs":[],"files":["lib.rs","models.rs","schema.rs"]};
 sourcesIndex['birdseed'] = {"name":"","dirs":[],"files":["lib.rs","models.rs","schema.rs"]};
+sourcesIndex['birdseed'] = {"name":"","dirs":[],"files":["lib.rs","models.rs","schema.rs"]};
 sourcesIndex['bitflags'] = {"name":"","dirs":[],"files":["lib.rs"]};
 sourcesIndex['byteorder'] = {"name":"","dirs":[],"files":["io.rs","lib.rs"]};
 sourcesIndex['cfg_if'] = {"name":"","dirs":[],"files":["lib.rs"]};
