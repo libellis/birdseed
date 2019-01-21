@@ -73,3 +73,18 @@ pub struct NewChoice<'a> {
     pub type_: &'a str,
     pub title: &'a str,
 }
+
+#[derive(Queryable)]
+pub struct Vote {
+    pub choice_id: i32,
+    pub username: String,
+    pub score: i32,
+}
+
+#[derive(Insertable)]
+#[table_name = "votes"]
+pub struct NewVote<'a> {
+    pub choice_id: i32,
+    pub username: &'a str,
+    pub score: i32,
+}

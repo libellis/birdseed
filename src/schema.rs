@@ -43,13 +43,24 @@ table! {
     }
 }
 
+table! {
+    votes (choice_id, username) {
+        choice_id -> Int4,
+        username -> Text,
+        score -> Int4,
+    }
+}
+
 joinable!(choices -> questions (question_id));
 joinable!(questions -> surveys (survey_id));
 joinable!(surveys -> users (author));
+joinable!(votes -> choices (choice_id));
+joinable!(votes -> users (username));
 
 allow_tables_to_appear_in_same_query!(
     choices,
     questions,
     surveys,
     users,
+    votes,
 );

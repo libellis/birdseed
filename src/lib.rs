@@ -10,6 +10,8 @@ extern crate dotenv;
 #[macro_use]
 extern crate fake;
 
+extern crate rand;
+
 use diesel::pg::PgConnection;
 use diesel::prelude::*;
 use dotenv::dotenv;
@@ -18,10 +20,15 @@ use std::env;
 use std::error::Error;
 use structopt::StructOpt;
 
+use rand::seq::SliceRandom;
+use rand::thread_rng;
+
 pub mod models;
 pub mod schema;
 
-use self::models::{Choice, NewChoice, NewQuestion, NewSurvey, NewUser, Question, Survey, User};
+use self::models::{
+    Choice, NewChoice, NewQuestion, NewSurvey, NewUser, NewVote, Question, Survey, User, Vote,
+};
 
 #[derive(StructOpt, Debug)]
 #[structopt(name = "birdseed", about = "the libellis database seeder")]
@@ -53,7 +60,8 @@ fn populate_all(conn: &PgConnection, row_count: u32) -> Result<(), Box<dyn Error
     let usernames = populate_users(&conn, row_count).unwrap();
     let survey_ids = populate_surveys(&conn, &usernames, row_count)?;
     let question_ids = populate_questions(&conn, &survey_ids, row_count)?;
-    populate_choices(&conn, &question_ids, row_count)?;
+    let choice_ids = populate_choices(&conn, &question_ids, row_count)?;
+    populate_votes(&conn, &usernames, &choice_ids)?;
     Ok(())
 }
 
@@ -104,14 +112,43 @@ fn populate_choices(
     conn: &PgConnection,
     question_ids: &Vec<i32>,
     row_count: u32,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<Vec<i32>, Box<dyn Error>> {
+    let mut choice_ids = Vec::new();
     for i in 0..row_count as usize {
         let q_id = question_ids[i];
         // For each question, inject 4 random text choices
         for _ in 0..4 {
             let c_title = format!("{}", fake!(Lorem.sentence(1, 4)));
             let c_type = "text".to_string();
-            create_choice(conn, q_id, &c_type, &c_title);
+            let choice = create_choice(conn, q_id, &c_type, &c_title);
+            choice_ids.push(choice.id);
+        }
+    }
+
+    Ok(choice_ids)
+}
+
+fn populate_votes(
+    conn: &PgConnection,
+    authors: &Vec<String>,
+    choice_ids: &Vec<i32>,
+) -> Result<(), Box<dyn Error>> {
+    // Create vectors of idx and shuffle them
+    let mut rng = thread_rng();
+    let mut choice_idxs: Vec<usize> = (0..choice_ids.len()).collect();
+    let choice_slice: &mut [usize] = &mut choice_idxs;
+    let mut author_idxs: Vec<usize> = (0..authors.len()).collect();
+    let author_slice: &mut [usize] = &mut author_idxs;
+    choice_slice.shuffle(&mut rng);
+    author_slice.shuffle(&mut rng);
+
+    // For each round up randomize the choice and the author voting
+    // on the choice
+    for i in 0..authors.len() - 1 {
+        let name = &authors[author_slice[i]];
+        for j in 1..=4 {
+            let c_id = choice_ids[choice_slice[(i + 1) * j]];
+            create_vote(conn, c_id, name, 1);
         }
     }
 
@@ -227,6 +264,21 @@ pub fn create_choice<'a>(
         .values(&new_choice)
         .get_result(conn)
         .expect("Error saving new choice")
+}
+
+pub fn create_vote<'a>(conn: &PgConnection, c_id: i32, name: &'a str, points: i32) -> Vote {
+    use schema::votes;
+
+    let new_vote = NewVote {
+        choice_id: c_id,
+        username: name,
+        score: points,
+    };
+
+    diesel::insert_into(votes::table)
+        .values(&new_vote)
+        .get_result(conn)
+        .expect("Error saving new vote")
 }
 
 #[cfg(test)]
