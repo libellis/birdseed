@@ -155,7 +155,7 @@ pub fn run(config: Birdseed) -> Result<(), Box<dyn Error>> {
 // Kicks off populating all tables and updating user with visual progress
 // bar along the way
 fn populate_all(conn: &PgConnection, row_count: u32) -> Result<(), Box<dyn Error>> {
-    println!("\r\n                  🐦 Seeding All Tables 🐦\r\n");
+    println!("\r\n                  🐦 Seeding All Tables 🐦\r\n",);
 
     let bar = ProgressBar::new((row_count * 11) as u64);
     bar.set_style(
@@ -170,7 +170,7 @@ fn populate_all(conn: &PgConnection, row_count: u32) -> Result<(), Box<dyn Error
     let choice_ids = populate_choices(&conn, &question_ids, row_count, &bar)?;
     populate_votes(&conn, &usernames, &choice_ids, &bar)?;
     bar.finish();
-    println!("\r\n             🐦 Birdseed has finished seeding! 🐦\r\n");
+    println!("\r\n             🐦 Birdseed has Finished Seeding! 🐦\r\n",);
     Ok(())
 }
 
