@@ -1,6 +1,6 @@
 [package]
 name = "birdseed"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Peter Farr <Peter@PrismaPhonic.com>"]
 description = "birdseed enables you to seed a libellis database with fake data, clear all tables, or rebuild all tables per the current embedded migrations"
 keywords = ["birdseed", "libellis", "seeding", "database", "postgres"]
@@ -19,7 +19,7 @@ include = [
 ]
 
 [badges]
-travis-ci = { repository = "https://travis-ci.org/libellis/birdseed", branch = "master" }
+travis-ci = { repository = "libellis/birdseed", branch = "master" }
 maintenance = { status = "actively-developed" }
 
 [[bin]]

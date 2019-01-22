@@ -441,7 +441,7 @@ fn create_question<'a>(
 
     let new_question = NewQuestion {
         survey_id: s_id,
-        type_: q_type,
+        question_type: q_type,
         title: q_title,
     };
 
@@ -456,7 +456,7 @@ fn create_choice<'a>(conn: &PgConnection, q_id: i32, c_type: &'a str, c_title: &
 
     let new_choice = NewChoice {
         question_id: q_id,
-        type_: c_type,
+        content_type: c_type,
         title: c_title,
     };
 

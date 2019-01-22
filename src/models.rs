@@ -45,7 +45,7 @@ pub struct NewSurvey<'a> {
 pub struct Question {
     pub id: i32,
     pub survey_id: i32,
-    pub type_: String,
+    pub question_type: String,
     pub title: String,
 }
 
@@ -53,7 +53,7 @@ pub struct Question {
 #[table_name = "questions"]
 pub struct NewQuestion<'a> {
     pub survey_id: i32,
-    pub type_: &'a str,
+    pub question_type: &'a str,
     pub title: &'a str,
 }
 
@@ -62,7 +62,7 @@ pub struct Choice {
     pub id: i32,
     pub question_id: i32,
     pub content: Option<String>,
-    pub type_: String,
+    pub content_type: String,
     pub title: String,
 }
 
@@ -70,7 +70,7 @@ pub struct Choice {
 #[table_name = "choices"]
 pub struct NewChoice<'a> {
     pub question_id: i32,
-    pub type_: &'a str,
+    pub content_type: &'a str,
     pub title: &'a str,
 }
 

@@ -3,8 +3,7 @@ table! {
         id -> Int4,
         question_id -> Int4,
         content -> Nullable<Text>,
-        #[sql_name = "type"]
-        type_ -> Text,
+        content_type -> Text,
         title -> Text,
     }
 }
@@ -13,8 +12,7 @@ table! {
     questions (id) {
         id -> Int4,
         survey_id -> Int4,
-        #[sql_name = "type"]
-        type_ -> Text,
+        question_type -> Text,
         title -> Text,
     }
 }
