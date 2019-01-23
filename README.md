@@ -71,6 +71,27 @@ libellis database and want to start over, or are creating your libellis database
 $ birdseed setup
 ```
 
+### `migrate`
+
+To run migrations, use the migrate subcommand (this will update your database schema to the
+most recent schema).
+
+```terminal
+$ birdseed migrate
+```
+
+By default this runs migrations on all databases. To run migrations on only main run:
+
+```terminal
+$ birdseed migrate -d main
+```
+
+To run migrations only on the test database run:
+
+```terminal
+$ birdseed migrate -d test
+```
+
 #### `clear`
 
 You can clear all tables with the `clear` subcommand:
