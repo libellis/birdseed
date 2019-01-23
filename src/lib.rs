@@ -11,15 +11,15 @@
 //!
 //! ## Setup
 //!
-//! You MUST set your `DATABASE_URL` environment variable to your libellis postgres database.
+//! You MUST set a `PSQL_URL` environment variable to your libellis postgres database.
 //!
 //! ### Example
 //! ```terminal
-//! $ export DATABASE_URL=postgres://username:password@localhost/libellis
+//! $ export DATABASE_URL=postgres://username:password@localhost/
 //! ```
 //!
-//! You can optionally set this in a `.env` file in the root folder of this project if you are
-//! running the project from a local folder.
+//! Note the ending forward slash which is necessary. You can optionally set this in a `.env` file
+//! in the root folder of this project if you are running the project from a local folder.
 //!
 //! ## Installation
 //!
@@ -60,6 +60,17 @@
 //!
 //! Note: What the row count really means is that we will seed row count amount of users, surveys
 //! and questions, but row count * 4 amount of choices and votes.
+//!
+//! ### `setup`
+//!
+//! You can setup the main libellis and libellis_test databases with this subcommand.  It will
+//! attempt to drop both libellis and libellis_test before creating them so be careful! Only use
+//! this if you don't need the data in your libellis database and want to start over, or are
+//! creating your libellis databases for the first time.
+//!
+//! ```terminal
+//! $ birdseed setup
+//! ```
 //!
 //! ### `clear`
 //!
