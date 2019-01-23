@@ -39,6 +39,7 @@ pub struct Survey {
 pub struct NewSurvey<'a> {
     pub author: &'a str,
     pub title: &'a str,
+    pub published: bool,
 }
 
 #[derive(Queryable)]

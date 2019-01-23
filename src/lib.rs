@@ -98,6 +98,8 @@ use diesel::prelude::*;
 use dotenv::dotenv;
 use std::env;
 
+use std::process::Command;
+
 use std::error::Error;
 use structopt::StructOpt;
 
@@ -131,13 +133,17 @@ pub enum Birdseed {
         row_count: u32,
     },
 
-    #[structopt(name = "clear")]
-    /// Clears all tables in libellis database
-    Clear,
+    #[structopt(name = "setup")]
+    /// Builds both libellis main and test databases and runs migrations
+    Setup,
 
     #[structopt(name = "rebuild")]
     /// Rebuilds all tables per most recent schema (embedded in binary)
     Rebuild,
+
+    #[structopt(name = "clear")]
+    /// Clears all tables in libellis database
+    Clear,
 }
 
 /// `run` will take in a Birdseed enum config (parsed in `main`) and either clear all tables or
@@ -146,15 +152,33 @@ pub fn run(config: Birdseed) -> Result<(), Box<dyn Error>> {
     let connection = establish_connection();
 
     match config {
-        Birdseed::Feed { row_count } => populate_all(&connection, row_count),
-        Birdseed::Clear => clear_all(&connection),
-        Birdseed::Rebuild => rebuild(&connection),
+        Birdseed::Feed { row_count } => populate_all(row_count),
+        Birdseed::Rebuild => rebuild(),
+        Birdseed::Setup => setup(),
+        Birdseed::Clear => clear_all(),
     }
+}
+
+fn setup() -> Result<(), Box<dyn Error>> {
+    drop_database("libellis");
+    drop_database("libellis_test");
+    setup_database("libellis");
+    setup_database("libellis_test");
+    Ok(())
+}
+
+fn setup_database(database: &str) {
+    Command::new("createdb").arg(database);
+}
+
+fn drop_database(database: &str) {
+    Command::new("dropdb").arg(database);
 }
 
 // Kicks off populating all tables and updating user with visual progress
 // bar along the way
-fn populate_all(conn: &PgConnection, row_count: u32) -> Result<(), Box<dyn Error>> {
+fn populate_all(row_count: u32) -> Result<(), Box<dyn Error>> {
+    let conn = establish_connection();
     println!("\r\n                  🐦 Seeding All Tables 🐦\r\n",);
 
     let bar = ProgressBar::new((row_count * 11) as u64);
@@ -176,8 +200,9 @@ fn populate_all(conn: &PgConnection, row_count: u32) -> Result<(), Box<dyn Error
 
 // Clears all tables in appropriate order and increments a progress bar with
 // custom start and completion messages
-fn clear_all(conn: &PgConnection) -> Result<(), Box<dyn Error>> {
+fn clear_all() -> Result<(), Box<dyn Error>> {
     use self::schema::*;
+    let conn = establish_connection();
 
     println!("\r\n                  🐦 Clearing all Tables 🐦\r\n");
 
@@ -237,7 +262,8 @@ fn drop_all(conn: &PgConnection) {
 }
 
 // Rebuilds all tables per most recent embedded diesel migrations
-fn rebuild(conn: &PgConnection) -> Result<(), Box<dyn Error>> {
+fn rebuild() -> Result<(), Box<dyn Error>> {
+    let conn = establish_connection();
     println!("\r\n                  🐦 Dropping all Tables 🐦\r\n");
     drop_all(conn);
     println!("\r\n                  🐦 Running Migrations 🐦\r\n");
@@ -423,6 +449,7 @@ fn create_survey<'a>(conn: &PgConnection, auth: &'a str, survey_title: &'a str) 
     let new_survey = NewSurvey {
         author: auth,
         title: survey_title,
+        published: true,
     };
 
     diesel::insert_into(surveys::table)
