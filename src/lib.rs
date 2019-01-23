@@ -72,20 +72,41 @@
 //! $ birdseed setup
 //! ```
 //!
-//! ### `clear`
-//!
-//! You can clear all tables with the `clear` subcommand:
-//!
-//! ```terminal
-//! $ birdseed clear
-//! ```
-//!
 //! ### `rebuild`
 //!
 //! You can rebuild all tables according to embedded diesel migrations
 //!
 //! ```terminal
 //! $ birdseed rebuild
+//! ```
+//!
+//! ### `migrate`
+//!
+//! To run migrations, use the migrate subcommand (this will update your database schema to the
+//! most recent schema).
+//!
+//! ```terminal
+//! $ birdseed migrate
+//! ```
+//!
+//! By default this runs migrations on all databases. To run migrations on only main run:
+//!
+//! ```terminal
+//! $ birdseed migrate -d main
+//! ```
+//!
+//! To run migrations only on the test database run:
+//!
+//! ```terminal
+//! $ birdseed migrate -d test
+//! ```
+//!
+//! ### `clear`
+//!
+//! You can clear all tables with the `clear` subcommand:
+//!
+//! ```terminal
+//! $ birdseed clear
 //! ```
 
 #[macro_use]
@@ -148,6 +169,14 @@ pub enum Birdseed {
     /// Builds both libellis main and test databases and runs migrations
     Setup,
 
+    #[structopt(name = "migrate")]
+    /// Builds both libellis main and test databases and runs migrations
+    Migrate {
+        /// Which database to run migrations on, main, test, or all
+        #[structopt(short = "db", long = "database", default_value = "all")]
+        db: String,
+    },
+
     #[structopt(name = "rebuild")]
     /// Rebuilds all tables per most recent schema (embedded in binary)
     Rebuild,
@@ -164,6 +193,7 @@ pub fn run(config: Birdseed) -> Result<(), Box<dyn Error>> {
         Birdseed::Feed { row_count } => populate_all(row_count),
         Birdseed::Rebuild => rebuild("libellis"),
         Birdseed::Setup => setup(),
+        Birdseed::Migrate { db } => migrate(&db),
         Birdseed::Clear => clear_all(),
     }
 }
@@ -222,6 +252,48 @@ fn populate_all(row_count: u32) -> Result<(), Box<dyn Error>> {
     populate_votes(&conn, &usernames, &choice_ids, &bar)?;
     bar.finish();
     println!("\r\n             🐦 Birdseed has Finished Seeding! 🐦\r\n",);
+    Ok(())
+}
+
+fn migrate(database: &str) -> Result<(), Box<dyn Error>> {
+    // get the base url and append it with the db name
+    dotenv().ok();
+    let base_url = env::var("PSQL_URL")?;
+
+    match database {
+        "all" | "a" => {
+            migrate_main(&base_url)?;
+            migrate_test(&base_url)?;
+        }
+        "main" => migrate_main(&base_url)?,
+        "test" => migrate_test(&base_url)?,
+        _ => {
+            panic!("Not a valid database type in the libellis universe! Choose main, test, or all")
+        }
+    };
+
+    Ok(())
+}
+
+fn migrate_main(base_url: &String) -> Result<(), Box<dyn Error>> {
+    env::set_var("DATABASE_URL", &format!("{}{}", base_url, "libellis"));
+
+    let conn = establish_connection();
+
+    println!("\r\n                  🐦 Running Migrations on Main DB 🐦\r\n");
+    embedded_migrations::run_with_output(&conn, &mut std::io::stdout())?;
+
+    Ok(())
+}
+
+fn migrate_test(base_url: &String) -> Result<(), Box<dyn Error>> {
+    env::set_var("DATABASE_URL", &format!("{}{}", base_url, "libellis_test"));
+
+    let conn = establish_connection();
+
+    println!("\r\n                  🐦 Running Migrations on Test DB 🐦\r\n");
+    embedded_migrations::run_with_output(&conn, &mut std::io::stdout())?;
+
     Ok(())
 }
 
