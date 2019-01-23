@@ -149,8 +149,6 @@ pub enum Birdseed {
 /// `run` will take in a Birdseed enum config (parsed in `main`) and either clear all tables or
 /// populate all tables with number of rows specified in -r (1000 by default)
 pub fn run(config: Birdseed) -> Result<(), Box<dyn Error>> {
-    let connection = establish_connection();
-
     match config {
         Birdseed::Feed { row_count } => populate_all(row_count),
         Birdseed::Rebuild => rebuild(),
@@ -213,15 +211,15 @@ fn clear_all() -> Result<(), Box<dyn Error>> {
             .progress_chars("##-"),
     );
 
-    diesel::delete(votes::table).execute(conn)?;
+    diesel::delete(votes::table).execute(&conn)?;
     bar.inc(1);
-    diesel::delete(choices::table).execute(conn)?;
+    diesel::delete(choices::table).execute(&conn)?;
     bar.inc(1);
-    diesel::delete(questions::table).execute(conn)?;
+    diesel::delete(questions::table).execute(&conn)?;
     bar.inc(1);
-    diesel::delete(surveys::table).execute(conn)?;
+    diesel::delete(surveys::table).execute(&conn)?;
     bar.inc(1);
-    diesel::delete(users::table).execute(conn)?;
+    diesel::delete(users::table).execute(&conn)?;
     bar.inc(1);
 
     bar.finish();
@@ -265,9 +263,9 @@ fn drop_all(conn: &PgConnection) {
 fn rebuild() -> Result<(), Box<dyn Error>> {
     let conn = establish_connection();
     println!("\r\n                  🐦 Dropping all Tables 🐦\r\n");
-    drop_all(conn);
+    drop_all(&conn);
     println!("\r\n                  🐦 Running Migrations 🐦\r\n");
-    embedded_migrations::run_with_output(conn, &mut std::io::stdout())?;
+    embedded_migrations::run_with_output(&conn, &mut std::io::stdout())?;
     println!("\r\n              🐦 Tables Successfully Rebuilt! 🐦\r\n");
     Ok(())
 }
