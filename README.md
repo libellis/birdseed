@@ -93,14 +93,6 @@ To run migrations only on the test database run:
 $ birdseed migrate -d test
 ```
 
-#### `clear`
-
-You can clear all tables with the `clear` subcommand:
-
-```terminal
-$ birdseed clear
-```
-
 #### `rebuild`
 
 You can rebuild all tables according to embedded diesel migrations. This drops each table (but does not drop the database itself) and then rebuilds all tables. Note that you must already have `libellis` and `libellis_test` databases for this to work. If you do not have those databases run `birdseed setup` instead.
@@ -121,4 +113,12 @@ You can also use `-d` for shorthand:
 
 ```terminal
 $ birdseed rebuild -d test
+```
+
+#### `clear`
+
+You can clear all tables with the `clear` subcommand:
+
+```terminal
+$ birdseed clear
 ```
