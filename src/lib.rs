@@ -139,9 +139,6 @@ extern crate diesel_migrations;
 #[macro_use]
 extern crate fake;
 
-#[macro_use]
-extern crate error_chain;
-
 extern crate indicatif;
 extern crate rand;
 
