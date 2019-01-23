@@ -182,13 +182,17 @@ pub enum Birdseed {
     /// Builds both libellis main and test databases and runs migrations
     Migrate {
         /// Which database to run migrations on, main, test, or all
-        #[structopt(short = "db", long = "database", default_value = "all")]
+        #[structopt(short = "d", long = "database", default_value = "all")]
         db: String,
     },
 
     #[structopt(name = "rebuild")]
     /// Rebuilds all tables per most recent schema (embedded in binary)
-    Rebuild,
+    Rebuild {
+        /// Which database to run rebuild on, main, test, or all
+        #[structopt(short = "d", long = "database", default_value = "all")]
+        db: String,
+    },
 
     #[structopt(name = "clear")]
     /// Clears all tables in libellis database
@@ -200,7 +204,7 @@ pub enum Birdseed {
 pub fn run(config: Birdseed) -> Result<(), Box<dyn Error>> {
     match config {
         Birdseed::Feed { row_count } => populate_all(row_count),
-        Birdseed::Rebuild => rebuild("libellis"),
+        Birdseed::Rebuild { db } => rebuild(&db),
         Birdseed::Setup => setup(),
         Birdseed::Migrate { db } => migrate(&db),
         Birdseed::Clear => clear_all(),
