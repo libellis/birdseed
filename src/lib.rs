@@ -122,6 +122,9 @@ extern crate diesel_migrations;
 #[macro_use]
 extern crate fake;
 
+#[macro_use]
+extern crate error_chain;
+
 extern crate indicatif;
 extern crate rand;
 
@@ -133,6 +136,8 @@ use std::env;
 use std::process::Command;
 
 use std::error::Error;
+use std::io;
+use std::io::ErrorKind::InvalidInput;
 use structopt::StructOpt;
 
 use rand::seq::SliceRandom;
@@ -148,6 +153,10 @@ embed_migrations!("./migrations");
 use self::models::{
     Choice, NewChoice, NewQuestion, NewSurvey, NewUser, NewVote, Question, Survey, User, Vote,
 };
+
+/**
+ * DEFINED ERRORS
+ */
 
 #[derive(StructOpt, Debug)]
 #[structopt(
@@ -268,7 +277,11 @@ fn migrate(database: &str) -> Result<(), Box<dyn Error>> {
         "main" => migrate_main(&base_url)?,
         "test" => migrate_test(&base_url)?,
         _ => {
-            panic!("Not a valid database type in the libellis universe! Choose main, test, or all")
+            return Err(io::Error::new(
+                InvalidInput,
+                "Invalid Database Type, choose 'main', 'test', or 'all'",
+            )
+            .into());
         }
     };
 
