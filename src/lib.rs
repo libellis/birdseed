@@ -74,10 +74,27 @@
 //!
 //! ### `rebuild`
 //!
-//! You can rebuild all tables according to embedded diesel migrations
+//! You can rebuild all tables according to embedded diesel migrations. This drops each table (but
+//! does not drop the database itself) and then rebuilds all tables. Note that you must already
+//! have `libellis` and `libellis_test` databases for this to work. If you do not have those
+//! databases run `birdseed setup` instead.
 //!
 //! ```terminal
 //! $ birdseed rebuild
+//! ```
+//!
+//! `rebuild` by default will rebuild all tables in both your main and test databases. If you would
+//! like to specify to only rebuild one database, pass in 'main' or 'test' to the -database
+//! argument flag:
+//!
+//! ```terminal
+//! $ birdseed rebuild -database main
+//! ```
+//!
+//! You can also use `-d` for shorthand:
+//!
+//! ```terminal
+//! $ birdseed rebuild -d test
 //! ```
 //!
 //! ### `migrate`
