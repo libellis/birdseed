@@ -274,8 +274,8 @@ fn migrate(database: &str) -> Result<(), Box<dyn Error>> {
             migrate_main(&base_url)?;
             migrate_test(&base_url)?;
         }
-        "main" => migrate_main(&base_url)?,
-        "test" => migrate_test(&base_url)?,
+        "main" | "m" => migrate_main(&base_url)?,
+        "test" | "t" => migrate_test(&base_url)?,
         _ => {
             return Err(io::Error::new(
                 InvalidInput,
@@ -381,13 +381,45 @@ fn drop_all(conn: &PgConnection) {
 
 // Rebuilds all tables per most recent embedded diesel migrations
 fn rebuild(database: &str) -> Result<(), Box<dyn Error>> {
-    // get the base url and append it with the db name
     dotenv().ok();
     let base_url = env::var("PSQL_URL")?;
-    std::env::set_var("DATABASE_URL", &format!("{}{}", base_url, database));
 
+    match database {
+        "all" | "a" => {
+            rebuild_main(&base_url)?;
+            rebuild_test(&base_url)?;
+        }
+        "main" | "m" => rebuild_main(&base_url)?,
+        "test" | "t" => rebuild_test(&base_url)?,
+        _ => {
+            return Err(io::Error::new(
+                InvalidInput,
+                "Invalid Database Type, choose 'main', 'test', or 'all'",
+            )
+            .into());
+        }
+    };
+
+    Ok(())
+}
+
+fn rebuild_main(base_url: &str) -> Result<(), Box<dyn Error>> {
+    std::env::set_var("DATABASE_URL", &format!("{}{}", base_url, "libellis"));
+    println!("\r\n                🐦 Connecting to Main DB 🐦\r\n");
     let conn = establish_connection();
-    println!("\r\n                  🐦 Dropping all Tables 🐦\r\n");
+    println!("\r\n                 🐦 Dropping all Tables 🐦\r\n");
+    drop_all(&conn);
+    println!("\r\n                  🐦 Running Migrations 🐦\r\n");
+    embedded_migrations::run_with_output(&conn, &mut std::io::stdout())?;
+    println!("\r\n              🐦 Tables Successfully Rebuilt! 🐦\r\n");
+    Ok(())
+}
+
+fn rebuild_test(base_url: &str) -> Result<(), Box<dyn Error>> {
+    std::env::set_var("DATABASE_URL", &format!("{}{}", base_url, "libellis_test"));
+    println!("\r\n                🐦 Connecting to Test DB 🐦\r\n");
+    let conn = establish_connection();
+    println!("\r\n                 🐦 Dropping all Tables 🐦\r\n");
     drop_all(&conn);
     println!("\r\n                  🐦 Running Migrations 🐦\r\n");
     embedded_migrations::run_with_output(&conn, &mut std::io::stdout())?;
