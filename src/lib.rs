@@ -151,7 +151,7 @@ pub enum Birdseed {
 pub fn run(config: Birdseed) -> Result<(), Box<dyn Error>> {
     match config {
         Birdseed::Feed { row_count } => populate_all(row_count),
-        Birdseed::Rebuild => rebuild(),
+        Birdseed::Rebuild => rebuild("libellis"),
         Birdseed::Setup => setup(),
         Birdseed::Clear => clear_all(),
     }
@@ -160,22 +160,40 @@ pub fn run(config: Birdseed) -> Result<(), Box<dyn Error>> {
 fn setup() -> Result<(), Box<dyn Error>> {
     drop_database("libellis");
     drop_database("libellis_test");
+    println!("\r\n                🐦 Creating Main Database 🐦\r\n",);
     setup_database("libellis");
+    println!("\r\n                🐦 Creating Test Database 🐦\r\n",);
     setup_database("libellis_test");
+    println!("\r\n              🐦 Running Main DB Migrations 🐦\r\n",);
+    rebuild("libellis")?;
+    println!("\r\n              🐦 Running Test DB Migrations 🐦\r\n",);
+    rebuild("libellis_test")?;
+    println!("\r\n                        🐦 All Done! 🐦\r\n",);
     Ok(())
 }
 
 fn setup_database(database: &str) {
-    Command::new("createdb").arg(database);
+    Command::new("createdb")
+        .arg(database)
+        .output()
+        .expect("failed to create database");
 }
 
 fn drop_database(database: &str) {
-    Command::new("dropdb").arg(database);
+    Command::new("dropdb")
+        .arg(database)
+        .output()
+        .expect("failed to drop database");
 }
 
-// Kicks off populating all tables and updating user with visual progress
-// bar along the way
+// Kicks off populating all tables in main database and updating user
+// with visual progress bar along the way
 fn populate_all(row_count: u32) -> Result<(), Box<dyn Error>> {
+    // get the base url and append it with the db name
+    dotenv().ok();
+    let base_url = env::var("PSQL_URL")?;
+    env::set_var("DATABASE_URL", &format!("{}{}", base_url, "libellis"));
+
     let conn = establish_connection();
     println!("\r\n                  🐦 Seeding All Tables 🐦\r\n",);
 
@@ -200,6 +218,12 @@ fn populate_all(row_count: u32) -> Result<(), Box<dyn Error>> {
 // custom start and completion messages
 fn clear_all() -> Result<(), Box<dyn Error>> {
     use self::schema::*;
+
+    // get the base url and append it with the db name
+    dotenv().ok();
+    let base_url = env::var("PSQL_URL")?;
+    std::env::set_var("DATABASE_URL", &format!("{}{}", base_url, "libellis"));
+
     let conn = establish_connection();
 
     println!("\r\n                  🐦 Clearing all Tables 🐦\r\n");
@@ -260,7 +284,12 @@ fn drop_all(conn: &PgConnection) {
 }
 
 // Rebuilds all tables per most recent embedded diesel migrations
-fn rebuild() -> Result<(), Box<dyn Error>> {
+fn rebuild(database: &str) -> Result<(), Box<dyn Error>> {
+    // get the base url and append it with the db name
+    dotenv().ok();
+    let base_url = env::var("PSQL_URL")?;
+    std::env::set_var("DATABASE_URL", &format!("{}{}", base_url, database));
+
     let conn = establish_connection();
     println!("\r\n                  🐦 Dropping all Tables 🐦\r\n");
     drop_all(&conn);
