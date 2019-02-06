@@ -152,6 +152,7 @@ use std::process::Command;
 use std::error::Error;
 use std::io;
 use std::io::ErrorKind::InvalidInput;
+use std::thread;
 use structopt::StructOpt;
 
 use rand::seq::SliceRandom;
@@ -161,6 +162,10 @@ use indicatif::{ProgressBar, ProgressStyle};
 
 mod models;
 mod schema;
+mod pg_pool;
+
+pub use pg_pool::DbConn;
+pub use pg_pool::Pool;
 
 embed_migrations!("./migrations");
 
@@ -262,7 +267,7 @@ fn populate_all(row_count: u32) -> Result<(), Box<dyn Error>> {
     let base_url = env::var("PSQL_URL")?;
     env::set_var("DATABASE_URL", &format!("{}{}", base_url, "libellis"));
 
-    let conn = establish_connection();
+    let pool = generate_pool();
     println!("\r\n                  🐦 Seeding All Tables 🐦\r\n",);
 
     let bar = ProgressBar::new((row_count * 11) as u64);
@@ -272,11 +277,11 @@ fn populate_all(row_count: u32) -> Result<(), Box<dyn Error>> {
             .progress_chars("##-"),
     );
 
-    let usernames = populate_users(&conn, row_count, &bar)?;
-    let survey_ids = populate_surveys(&conn, &usernames, row_count, &bar)?;
-    let question_ids = populate_questions(&conn, &survey_ids, row_count, &bar)?;
-    let choice_ids = populate_choices(&conn, &question_ids, row_count, &bar)?;
-    populate_votes(&conn, &usernames, &choice_ids, &bar)?;
+    let usernames = populate_users(&pool, row_count, &bar)?;
+    // let survey_ids = populate_surveys(&conn, &usernames, row_count, &bar)?;
+    // let question_ids = populate_questions(&conn, &survey_ids, row_count, &bar)?;
+    // let choice_ids = populate_choices(&conn, &question_ids, row_count, &bar)?;
+    // populate_votes(&conn, &usernames, &choice_ids, &bar)?;
     bar.finish();
     println!("\r\n             🐦 Birdseed has Finished Seeding! 🐦\r\n",);
     Ok(())
@@ -447,29 +452,34 @@ fn rebuild_test(base_url: &str) -> Result<(), Box<dyn Error>> {
 
 // Populates users table with row_count random users
 fn populate_users(
-    conn: &PgConnection,
+    pool: &Pool,
     row_count: u32,
     bar: &ProgressBar,
 ) -> Result<Vec<String>, Box<dyn Error>> {
     let mut usernames = Vec::new();
     bar.set_message(&format!("Seeding {} users", row_count));
     for _ in 0..row_count {
-        let user = format!(
-            "{}{}",
-            fake!(Internet.user_name),
-            fake!(Number.between(90, 9999))
-        );
-        let pw = format!(
-            "{}{}",
-            fake!(Name.name),
-            fake!(Number.between(10000, 99999))
-        );
-        let em = format!("{}@gmail.com", user);
-        let first = format!("{}", fake!(Name.first_name));
-        let last = format!("{}", fake!(Name.last_name));
+        let pool = pool.clone();
+        thread::spawn(move || {
+            let conn = pool.get().unwrap();
 
-        create_user(conn, &user, &pw, &em, &first, &last);
-        usernames.push(user);
+            let user = format!(
+                "{}{}",
+                fake!(Internet.user_name),
+                fake!(Number.between(90, 9999))
+            );
+            let pw = format!(
+                "{}{}",
+                fake!(Name.name),
+                fake!(Number.between(10000, 99999))
+            );
+            let em = format!("{}@gmail.com", user);
+            let first = format!("{}", fake!(Name.first_name));
+            let last = format!("{}", fake!(Name.last_name));
+
+            create_user(&conn, &user, &pw, &em, &first, &last);
+            usernames.push(user);
+        });
         bar.inc(1);
     }
 
@@ -578,13 +588,23 @@ fn populate_votes(
 }
 
 // Establishes a connection to the libellis postgres database on your machine, as specified by your
-// DATABASE_URL environment variable.
+// DATABASE_URL environment variable. Returns a single PgConnection
 fn establish_connection() -> PgConnection {
     dotenv().ok();
 
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
 
     PgConnection::establish(&database_url).expect(&format!("Error connecting to {}", database_url))
+}
+
+// Establishes a connection to the libellis postgres database on your machine, as specified by your
+// DATABASE_URL environment variable. Returns a Pool
+fn generate_pool() -> Pool {
+    dotenv().ok();
+
+    let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+
+    pg_pool::init(&database_url)
 }
 
 /**
