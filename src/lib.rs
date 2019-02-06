@@ -281,7 +281,7 @@ fn populate_all(row_count: u32) -> Result<(), Box<dyn Error>> {
     let usernames = populate_users(&pool, row_count, &bar)?;
     let survey_ids = populate_surveys(&pool, &usernames, row_count, &bar)?;
     let question_ids = populate_questions(&pool, &survey_ids, row_count, &bar)?;
-    // let choice_ids = populate_choices(&conn, &question_ids, row_count, &bar)?;
+    let choice_ids = populate_choices(&pool, &question_ids, row_count, &bar)?;
     // populate_votes(&conn, &usernames, &choice_ids, &bar)?;
     bar.finish();
     println!("\r\n             🐦 Birdseed has Finished Seeding! 🐦\r\n",);
@@ -539,24 +539,28 @@ fn populate_questions(
 // Populates choices table with row_count * 4 random choices ensuring that each question relates to
 // an existing survey
 fn populate_choices(
-    conn: &PgConnection,
+    pool: &Pool,
     question_ids: &Vec<i32>,
     row_count: u32,
     bar: &ProgressBar,
 ) -> Result<Vec<i32>, Box<dyn Error>> {
-    let mut choice_ids = Vec::new();
     bar.set_message(&format!("Seeding {} choices", (row_count * 4)));
-    for i in 0..row_count as usize {
-        let q_id = question_ids[i];
+
+    let choice_ids: Vec<i32> = question_ids.par_iter().map(|q_id| {
+
         // For each question, inject 4 random text choices
-        for _ in 0..4 {
+        (0..4).into_par_iter().map(|_| {
+            let pool = pool.clone();
+            let conn = pool.get().unwrap();
+
             let c_title = format!("{}", fake!(Lorem.sentence(1, 4)));
             let c_type = "text".to_string();
-            let choice = create_choice(conn, q_id, &c_type, &c_title);
-            choice_ids.push(choice.id);
+            let choice = create_choice(&conn, *q_id, &c_type, &c_title);
             bar.inc(1);
-        }
-    }
+            choice.id
+         }).collect()
+
+    }).collect::<Vec<Vec<i32>>>().concat();
 
     Ok(choice_ids)
 }
