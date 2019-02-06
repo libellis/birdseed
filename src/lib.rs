@@ -279,8 +279,8 @@ fn populate_all(row_count: u32) -> Result<(), Box<dyn Error>> {
     );
 
     let usernames = populate_users(&pool, row_count, &bar)?;
-    // let survey_ids = populate_surveys(&conn, &usernames, row_count, &bar)?;
-    // let question_ids = populate_questions(&conn, &survey_ids, row_count, &bar)?;
+    let survey_ids = populate_surveys(&pool, &usernames, row_count, &bar)?;
+    let question_ids = populate_questions(&conn, &survey_ids, row_count, &bar)?;
     // let choice_ids = populate_choices(&conn, &question_ids, row_count, &bar)?;
     // populate_votes(&conn, &usernames, &choice_ids, &bar)?;
     bar.finish();
@@ -490,20 +490,24 @@ fn populate_users(
 // Populates surveys table with row_count random surveys making sure each survey is being created
 // by an existing user
 fn populate_surveys(
-    conn: &PgConnection,
+    pool: &Pool,
     authors: &Vec<String>,
     row_count: u32,
     bar: &ProgressBar,
 ) -> Result<Vec<i32>, Box<dyn Error>> {
-    let mut survey_ids = Vec::new();
     bar.set_message(&format!("Seeding {} surveys", row_count));
-    for i in 0..row_count as usize {
-        let auth = &authors[i];
+
+    let survey_ids: Vec<i32> = authors.par_iter().map(|auth| {
+        let pool = pool.clone();
+
+        let conn = pool.get().unwrap();
+
         let survey_title = format!("{}", fake!(Lorem.sentence(4, 8)));
-        let survey = create_survey(conn, auth, &survey_title);
-        survey_ids.push(survey.id);
+        let survey = create_survey(&conn, &auth, &survey_title);
         bar.inc(1);
-    }
+
+        survey.id
+    }).collect();
 
     Ok(survey_ids)
 }
@@ -511,7 +515,7 @@ fn populate_surveys(
 // Populates questions table with row_count random questions ensuring that each question relates to
 // an existing survey
 fn populate_questions(
-    conn: &PgConnection,
+    pool: &Pool,
     survey_ids: &Vec<i32>,
     row_count: u32,
     bar: &ProgressBar,
