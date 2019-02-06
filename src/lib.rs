@@ -282,7 +282,7 @@ fn populate_all(row_count: u32) -> Result<(), Box<dyn Error>> {
     let survey_ids = populate_surveys(&pool, &usernames, row_count, &bar)?;
     let question_ids = populate_questions(&pool, &survey_ids, row_count, &bar)?;
     let choice_ids = populate_choices(&pool, &question_ids, row_count, &bar)?;
-    // populate_votes(&conn, &usernames, &choice_ids, &bar)?;
+    populate_votes(&pool, &usernames, &choice_ids, &bar)?;
     bar.finish();
     println!("\r\n             🐦 Birdseed has Finished Seeding! 🐦\r\n",);
     Ok(())
@@ -568,7 +568,7 @@ fn populate_choices(
 // Populates the votes table with real votes from our newly inserted random users who vote on
 // choices in a semi-randomish way (not that random really)
 fn populate_votes(
-    conn: &PgConnection,
+    pool: &Pool,
     authors: &Vec<String>,
     choice_ids: &Vec<i32>,
     bar: &ProgressBar,
@@ -586,14 +586,20 @@ fn populate_votes(
 
     // For each round up randomize the choice and the author voting
     // on the choice
-    for i in 0..authors.len() - 1 {
-        let name = &authors[author_slice[i]];
-        for j in 1..=4 {
-            let c_id = choice_ids[choice_slice[(i + 1) * j]];
-            create_vote(conn, c_id, name, 1);
-            bar.inc(1);
+    author_slice.par_iter().enumerate().for_each(|(i, rand_i)| {
+        let name = &authors[*rand_i];
+
+        if i < authors.len() - 1 {
+            (1..5 as usize).into_par_iter().for_each(|j| {
+                let pool = pool.clone();
+                let conn = pool.get().unwrap();
+
+                let c_id = choice_ids[choice_slice[(i + 1) * j]];
+                create_vote(&conn, c_id, name, 1);
+                bar.inc(1);
+            });
         }
-    }
+    });
 
     Ok(())
 }
