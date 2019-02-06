@@ -15,7 +15,7 @@
 //!
 //! ### Example
 //! ```terminal
-//! $ export DATABASE_URL=postgres://username:password@localhost/
+//! $ export PSQL_URL=postgres://username:password@localhost/
 //! ```
 //!
 //! Note the ending forward slash which is necessary. You can optionally set this in a `.env` file
