@@ -152,11 +152,12 @@ use std::process::Command;
 use std::error::Error;
 use std::io;
 use std::io::ErrorKind::InvalidInput;
-use std::thread;
 use structopt::StructOpt;
 
 use rand::seq::SliceRandom;
 use rand::thread_rng;
+
+use rayon::prelude::*;
 
 use indicatif::{ProgressBar, ProgressStyle};
 
@@ -456,32 +457,32 @@ fn populate_users(
     row_count: u32,
     bar: &ProgressBar,
 ) -> Result<Vec<String>, Box<dyn Error>> {
-    let mut usernames = Vec::new();
     bar.set_message(&format!("Seeding {} users", row_count));
-    for _ in 0..row_count {
+
+    let usernames: Vec<String> = (0..row_count).into_par_iter().map(|_| {
         let pool = pool.clone();
-        thread::spawn(move || {
-            let conn = pool.get().unwrap();
 
-            let user = format!(
-                "{}{}",
-                fake!(Internet.user_name),
-                fake!(Number.between(90, 9999))
-            );
-            let pw = format!(
-                "{}{}",
-                fake!(Name.name),
-                fake!(Number.between(10000, 99999))
-            );
-            let em = format!("{}@gmail.com", user);
-            let first = format!("{}", fake!(Name.first_name));
-            let last = format!("{}", fake!(Name.last_name));
+        let conn = pool.get().unwrap();
 
-            create_user(&conn, &user, &pw, &em, &first, &last);
-            usernames.push(user);
-        });
+        let user = format!(
+            "{}{}",
+            fake!(Internet.user_name),
+            fake!(Number.between(90, 9999))
+        );
+        let pw = format!(
+            "{}{}",
+            fake!(Name.name),
+            fake!(Number.between(10000, 99999))
+        );
+        let em = format!("{}@gmail.com", user);
+        let first = format!("{}", fake!(Name.first_name));
+        let last = format!("{}", fake!(Name.last_name));
+
+        create_user(&conn, &user, &pw, &em, &first, &last);
         bar.inc(1);
-    }
+
+		user
+    }).collect();
 
     Ok(usernames)
 }
