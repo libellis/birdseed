@@ -280,7 +280,7 @@ fn populate_all(row_count: u32) -> Result<(), Box<dyn Error>> {
 
     let usernames = populate_users(&pool, row_count, &bar)?;
     let survey_ids = populate_surveys(&pool, &usernames, row_count, &bar)?;
-    let question_ids = populate_questions(&conn, &survey_ids, row_count, &bar)?;
+    let question_ids = populate_questions(&pool, &survey_ids, row_count, &bar)?;
     // let choice_ids = populate_choices(&conn, &question_ids, row_count, &bar)?;
     // populate_votes(&conn, &usernames, &choice_ids, &bar)?;
     bar.finish();
@@ -499,7 +499,6 @@ fn populate_surveys(
 
     let survey_ids: Vec<i32> = authors.par_iter().map(|auth| {
         let pool = pool.clone();
-
         let conn = pool.get().unwrap();
 
         let survey_title = format!("{}", fake!(Lorem.sentence(4, 8)));
@@ -520,16 +519,19 @@ fn populate_questions(
     row_count: u32,
     bar: &ProgressBar,
 ) -> Result<Vec<i32>, Box<dyn Error>> {
-    let mut question_ids = Vec::new();
     bar.set_message(&format!("Seeding {} questions", row_count));
-    for i in 0..row_count as usize {
-        let s_id = survey_ids[i];
+
+    let question_ids: Vec<i32> = survey_ids.par_iter().map(|s_id| {
+        let pool = pool.clone();
+        let conn = pool.get().unwrap();
+
         let q_title = format!("{}", fake!(Lorem.sentence(3, 7)));
         let q_type = "multiple".to_string();
-        let question = create_question(conn, s_id, &q_type, &q_title);
-        question_ids.push(question.id);
+        let question = create_question(&conn, *s_id, &q_type, &q_title);
         bar.inc(1);
-    }
+
+        question.id
+    }).collect();
 
     Ok(question_ids)
 }
