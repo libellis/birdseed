@@ -239,9 +239,9 @@ fn setup() -> Result<(), Box<dyn Error>> {
     println!("\r\n                🐦 Creating Test Database 🐦\r\n",);
     setup_database("libellis_test");
     println!("\r\n              🐦 Running Main DB Migrations 🐦\r\n",);
-    rebuild("libellis")?;
+    rebuild("main")?;
     println!("\r\n              🐦 Running Test DB Migrations 🐦\r\n",);
-    rebuild("libellis_test")?;
+    rebuild("test")?;
     println!("\r\n                        🐦 All Done! 🐦\r\n",);
     Ok(())
 }
