@@ -171,7 +171,7 @@ pub use pg_pool::Pool;
 embed_migrations!("./migrations");
 
 use self::models::{
-    Choice, NewChoice, NewQuestion, NewSurvey, NewUser, NewVote, Question, Survey, User, Vote,
+    Choice, NewChoice, NewQuestion, NewSurvey, NewUser, NewVote, Question, Survey, User, Vote, Category, NewCategory
 };
 
 /**
@@ -279,6 +279,10 @@ fn populate_all(row_count: u32) -> Result<(), Box<dyn Error>> {
     );
 
     let usernames = populate_users(&pool, row_count, &bar)?;
+
+    let _ = populate_categories(&pool, "TestCategory", &bar)?;
+
+
     let survey_ids = populate_surveys(&pool, &usernames, row_count, &bar)?;
     let question_ids = populate_questions(&pool, &survey_ids, row_count, &bar)?;
     let choice_ids = populate_choices(&pool, &question_ids, row_count, &bar)?;
@@ -363,6 +367,8 @@ fn clear_all() -> Result<(), Box<dyn Error>> {
     bar.inc(1);
     diesel::delete(surveys::table).execute(&conn)?;
     bar.inc(1);
+    diesel::delete(categories::table).execute(&conn)?;
+    bar.inc(1);
     diesel::delete(users::table).execute(&conn)?;
     bar.inc(1);
 
@@ -379,7 +385,7 @@ fn clear_all() -> Result<(), Box<dyn Error>> {
 // where a user has manually deleted some but not all of their tables. Open a PR
 // request if you have a better solution in mind.
 fn drop_all(conn: &PgConnection) {
-    let bar = ProgressBar::new(7);
+    let bar = ProgressBar::new(8);
     bar.set_style(
         ProgressStyle::default_bar()
             .template("[{elapsed_precise}] {bar:40.cyan/blue} {msg}")
@@ -395,6 +401,8 @@ fn drop_all(conn: &PgConnection) {
     conn.execute("DROP TABLE questions");
     bar.inc(1);
     conn.execute("DROP TABLE surveys");
+    bar.inc(1);
+    conn.execute("DROP TABLE categories");
     bar.inc(1);
     conn.execute("DROP TABLE users");
     bar.inc(1);
@@ -487,6 +495,23 @@ fn populate_users(
     Ok(usernames)
 }
 
+// TODO: UPDATE THIS TO POPULATE RANDOM CHOICES
+fn populate_categories(
+    pool: &Pool,
+    title: &str,
+    bar: &ProgressBar,
+) -> Result<String, Box<dyn Error>> {
+    bar.set_message(&format!("Seeding 1 Test Category"));
+
+    let pool = pool.clone();
+    let conn = pool.get().unwrap();
+
+    create_category(&conn, title);
+    
+
+    Ok(title.to_string())
+}
+
 // Populates surveys table with row_count random surveys making sure each survey is being created
 // by an existing user
 fn populate_surveys(
@@ -502,7 +527,11 @@ fn populate_surveys(
         let conn = pool.get().unwrap();
 
         let survey_title = format!("{}", fake!(Lorem.sentence(4, 8)));
-        let survey = create_survey(&conn, &auth, &survey_title);
+
+        // TODO: Change this later to not be a static category field
+        let cat = "TestCategory";
+
+        let survey = create_survey(&conn, &auth, &survey_title, cat);
         bar.inc(1);
 
         survey.id
@@ -653,13 +682,14 @@ fn create_user<'a>(
         .expect("Error saving new user")
 }
 
-fn create_survey<'a>(conn: &PgConnection, auth: &'a str, survey_title: &'a str) -> Survey {
+fn create_survey<'a>(conn: &PgConnection, auth: &'a str, survey_title: &'a str, cat: &'a str) -> Survey {
     use self::schema::surveys;
 
     let new_survey = NewSurvey {
         author: auth,
         title: survey_title,
         published: true,
+        category: cat,
     };
 
     diesel::insert_into(surveys::table)
@@ -714,6 +744,19 @@ fn create_vote<'a>(conn: &PgConnection, c_id: i32, name: &'a str, points: i32) -
 
     diesel::insert_into(votes::table)
         .values(&new_vote)
+        .get_result(conn)
+        .expect("Error saving new vote")
+}
+
+fn create_category<'a>(conn: &PgConnection, title: &'a str) -> Category {
+    use self::schema::categories;
+
+    let new_category = NewCategory {
+        title,
+    };
+
+    diesel::insert_into(categories::table)
+        .values(&new_category)
         .get_result(conn)
         .expect("Error saving new vote")
 }

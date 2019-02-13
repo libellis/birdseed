@@ -32,6 +32,12 @@ pub struct Survey {
     pub anonymous: bool,
     pub published: bool,
     pub date_posted: SystemTime,
+    pub category: String,
+}
+
+#[derive(Queryable)]
+pub struct Category {
+    pub title: String,
 }
 
 #[derive(Insertable)]
@@ -40,6 +46,7 @@ pub struct NewSurvey<'a> {
     pub author: &'a str,
     pub title: &'a str,
     pub published: bool,
+    pub category: &'a str,
 }
 
 #[derive(Queryable)]
@@ -88,4 +95,10 @@ pub struct NewVote<'a> {
     pub choice_id: i32,
     pub username: &'a str,
     pub score: i32,
+}
+
+#[derive(Insertable)]
+#[table_name = "categories"]
+pub struct NewCategory<'a> {
+    pub title: &'a str,
 }

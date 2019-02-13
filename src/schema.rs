@@ -1,4 +1,10 @@
 table! {
+    categories (title) {
+        title -> Text,
+    }
+}
+
+table! {
     choices (id) {
         id -> Int4,
         question_id -> Int4,
@@ -26,6 +32,7 @@ table! {
         anonymous -> Bool,
         published -> Bool,
         date_posted -> Timestamp,
+        category -> Text,
     }
 }
 
@@ -51,11 +58,13 @@ table! {
 
 joinable!(choices -> questions (question_id));
 joinable!(questions -> surveys (survey_id));
+joinable!(surveys -> categories (category));
 joinable!(surveys -> users (author));
 joinable!(votes -> choices (choice_id));
 joinable!(votes -> users (username));
 
 allow_tables_to_appear_in_same_query!(
+    categories,
     choices,
     questions,
     surveys,
