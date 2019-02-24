@@ -197,6 +197,14 @@ pub enum Birdseed {
         row_count: u32,
     },
 
+    #[structopt(name = "icecream")]
+    /// Seeds random icrecream data into all tables
+    Icecream {
+        /// How many rows to inject
+        #[structopt(short = "r", long = "rows", default_value = "1000")]
+        row_count: u32,
+    },
+
     #[structopt(name = "setup")]
     /// Builds both libellis main and test databases and runs migrations
     Setup,
@@ -229,6 +237,7 @@ pub fn run(config: Birdseed) -> Result<(), Box<dyn Error>> {
         Birdseed::Feed { row_count } => populate_all(row_count),
         Birdseed::Rebuild { db } => rebuild(&db),
         Birdseed::Setup => setup(),
+        Birdseed::Icecream { row_count } => populate_icecream(row_count),
         Birdseed::Migrate { db } => migrate(&db),
         Birdseed::Clear => clear_all(),
     }
@@ -289,6 +298,82 @@ fn populate_all(row_count: u32) -> Result<(), Box<dyn Error>> {
     let question_ids = populate_questions(&pool, &survey_ids, row_count, &bar)?;
     let choice_ids = populate_choices(&pool, &question_ids, row_count, &bar)?;
     populate_votes(&pool, &usernames, &choice_ids, &bar)?;
+    bar.finish();
+    println!("\r\n             🐦 Birdseed has Finished Seeding! 🐦\r\n",);
+    Ok(())
+}
+
+// Kicks off populating all tables in main database and updating user
+// with visual progress bar along the way
+fn populate_icecream(row_count: u32) -> Result<(), Box<dyn Error>> {
+    // get the base url and append it with the db name
+    dotenv().ok();
+    let base_url = env::var("PSQL_URL")?;
+    env::set_var("DATABASE_URL", &format!("{}{}", base_url, "libellis"));
+
+    let pool = generate_pool();
+    println!("\r\n                  🐦 Seeding All Tables 🐦\r\n",);
+
+    let bar = ProgressBar::new((row_count * 9) as u64);
+    bar.set_style(
+        ProgressStyle::default_bar()
+            .template("[{elapsed_precise}] {bar:40.cyan/blue} {msg}")
+            .progress_chars("##-"),
+    );
+
+    let usernames = populate_users(&pool, row_count, &bar)?;
+
+    let _ = populate_categories(&pool, "food", &bar)?;
+
+    let mut survey_id = 0;
+
+    // scoped so the pool connection gets dropped automatically
+    {
+        let pool = pool.clone();
+        let conn = pool.get().unwrap();
+
+        let survey_title = "What is your favorite icecream?";
+
+        let cat = "food";
+
+        let survey = create_survey(&conn, &usernames[0], &survey_title, cat);
+
+        survey_id = survey.id;
+    }
+
+    let mut question_id = 0;
+    // question injection
+    {
+        let pool = pool.clone();
+        let conn = pool.get().unwrap();
+
+        let q_title = "What is your favorite icecream?";
+        let q_type = "multiple".to_string();
+
+        let question = create_question(&conn, survey_id, &q_type, &q_title);
+
+        question_id = question.id;
+    }
+
+    let choices = vec!["Strawberry", "Vanilla", "Chocolate"];
+    let mut choice_ids: Vec<i32> = Vec::new();
+
+    // choice injection
+    {
+        let pool = pool.clone();
+        let conn = pool.get().unwrap();
+
+        choice_ids = choices
+            .into_iter()
+            .map(|choice| {
+                let c_type = "text".to_string();
+                let choice_struct = create_choice(&conn, question_id, &c_type, choice);
+                choice_struct.id
+            })
+            .collect();
+    }
+
+    populate_icecream_votes(&pool, &usernames, &choice_ids, &bar)?;
     bar.finish();
     println!("\r\n             🐦 Birdseed has Finished Seeding! 🐦\r\n",);
     Ok(())
@@ -643,18 +728,77 @@ fn populate_votes(
                 let c_id = choice_ids[choice_slice[(i + 1) * j]];
 
                 // placeholder - randomize later
-                let geo_pnt = GeogPoint {
-                    x: 0.0,
-                    y: 0.0,
-                    srid: Some(4326),
-                };
+                let geo_pnt: GeogPoint = gen_rand_geo();
 
-                let fence_tit = "No Location";
+                let fence_tit = "Nob Hill";
 
                 create_vote(&conn, c_id, name, 1, geo_pnt, fence_tit);
                 bar.inc(1);
             });
         }
+    });
+
+    Ok(())
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct GeoBox {
+    pub x_range: (f64, f64),
+    pub y_range: (f64, f64),
+}
+
+use rand::Rng;
+
+fn gen_rand_geo() -> GeogPoint {
+    let mut rng = rand::thread_rng();
+    let box1 = GeoBox {
+        x_range: (-122.4378204345703, -122.40348815917969),
+        y_range: (37.77831314799669, 37.80381638220768),
+    };
+
+    let box2 = GeoBox {
+        x_range: (-122.50579833984375, -122.39250183105467),
+        y_range: (37.74248523826606, 37.783740105227224),
+    };
+
+    let boxes: Vec<GeoBox> = vec![box1, box2];
+
+    // generate random number between 0 and 1 and round to figure out which index to pick
+    // then generate random ranges between the bounds for that box and return a new GeogPoint
+    let index_choice = rng.gen::<f64>().round() as usize;
+    let choosen_box = boxes[index_choice].clone();
+
+    let mut rng1 = rand::thread_rng();
+    let mut rng2 = rand::thread_rng();
+    GeogPoint {
+        x: rng1.gen_range(choosen_box.x_range.0, choosen_box.x_range.1),
+        y: rng2.gen_range(choosen_box.y_range.0, choosen_box.y_range.1),
+        srid: Some(4326),
+    }
+}
+
+fn populate_icecream_votes(
+    pool: &Pool,
+    authors: &Vec<String>,
+    choice_ids: &Vec<i32>,
+    bar: &ProgressBar,
+) -> Result<(), Box<dyn Error>> {
+    bar.set_message(&format!("{} users are voting", (authors.len())));
+
+    authors.par_iter().for_each(|author| {
+        let mut rng = thread_rng();
+        let pool = pool.clone();
+        let conn = pool.get().unwrap();
+
+        let c_id = choice_ids[rng.gen_range(0, 3) as usize];
+
+        // placeholder - randomize later
+        let geo_pnt: GeogPoint = gen_rand_geo();
+
+        let fence_tit = "Nob Hill";
+
+        create_vote(&conn, c_id, author, 1, geo_pnt, fence_tit);
+        bar.inc(1);
     });
 
     Ok(())
