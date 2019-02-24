@@ -1,10 +1,16 @@
 table! {
+    use diesel::sql_types::*;
+    use diesel_geography::sql_types::*;
+
     categories (title) {
         title -> Text,
     }
 }
 
 table! {
+    use diesel::sql_types::*;
+    use diesel_geography::sql_types::*;
+
     choices (id) {
         id -> Int4,
         question_id -> Int4,
@@ -15,6 +21,20 @@ table! {
 }
 
 table! {
+    use diesel::sql_types::*;
+    use diesel_geography::sql_types::*;
+
+    fences (title) {
+        title -> Text,
+        geo_level -> Int4,
+        geo -> Geography,
+    }
+}
+
+table! {
+    use diesel::sql_types::*;
+    use diesel_geography::sql_types::*;
+
     questions (id) {
         id -> Int4,
         survey_id -> Int4,
@@ -24,6 +44,22 @@ table! {
 }
 
 table! {
+    use diesel::sql_types::*;
+    use diesel_geography::sql_types::*;
+
+    spatial_ref_sys (srid) {
+        srid -> Int4,
+        auth_name -> Nullable<Varchar>,
+        auth_srid -> Nullable<Int4>,
+        srtext -> Nullable<Varchar>,
+        proj4text -> Nullable<Varchar>,
+    }
+}
+
+table! {
+    use diesel::sql_types::*;
+    use diesel_geography::sql_types::*;
+
     surveys (id) {
         id -> Int4,
         author -> Text,
@@ -37,6 +73,9 @@ table! {
 }
 
 table! {
+    use diesel::sql_types::*;
+    use diesel_geography::sql_types::*;
+
     users (username) {
         username -> Text,
         password -> Text,
@@ -49,10 +88,16 @@ table! {
 }
 
 table! {
+    use diesel::sql_types::*;
+    use diesel_geography::sql_types::*;
+
     votes (choice_id, username) {
         choice_id -> Int4,
         username -> Text,
         score -> Int4,
+        geo -> Geography,
+        fence_title -> Text,
+        date_voted -> Timestamp,
     }
 }
 
@@ -61,12 +106,15 @@ joinable!(questions -> surveys (survey_id));
 joinable!(surveys -> categories (category));
 joinable!(surveys -> users (author));
 joinable!(votes -> choices (choice_id));
+joinable!(votes -> fences (fence_title));
 joinable!(votes -> users (username));
 
 allow_tables_to_appear_in_same_query!(
     categories,
     choices,
+    fences,
     questions,
+    spatial_ref_sys,
     surveys,
     users,
     votes,
