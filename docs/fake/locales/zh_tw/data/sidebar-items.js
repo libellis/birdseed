@@ -1,1 +1,0 @@
-initSidebarItems({"static":[["NAME_FIRST_NAME",""],["NAME_LAST_NAME",""]]});
