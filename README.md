@@ -42,25 +42,6 @@ $ cargo build --release
 
 ### Features
 
-#### `feed`
-
-You can seed all databases with the `feed` subcommand:
-
-```terminal
-$ birdseed feed
-```
-
-We can specify a row count (overriding the default of 1000 rows):
-
-```terminal
-$ birdseed feed -r 10000
-```
-
-In this exampe we override the default of 1,000 rows and instead seed 10,000 rows.
-
-Note: What the row count really means is that we will seed row count amount of users, surveys
-and questions, but row count * 4 amount of choices and votes.
-
 ### `setup`
 
 You can setup the main libellis and libellis_test databases with this
@@ -70,27 +51,6 @@ libellis database and want to start over, or are creating your libellis database
 
 ```terminal
 $ birdseed setup
-```
-
-### `migrate`
-
-To run migrations, use the migrate subcommand (this will update your database schema to the
-most recent schema).
-
-```terminal
-$ birdseed migrate
-```
-
-By default this runs migrations on all databases. To run migrations on only main run:
-
-```terminal
-$ birdseed migrate -d main
-```
-
-To run migrations only on the test database run:
-
-```terminal
-$ birdseed migrate -d test
 ```
 
 #### `rebuild`
@@ -113,6 +73,46 @@ You can also use `-d` for shorthand:
 
 ```terminal
 $ birdseed rebuild -d test
+```
+
+#### `feed`
+
+You can seed all databases with the `feed` subcommand:
+
+```terminal
+$ birdseed feed
+```
+
+We can specify a row count (overriding the default of 1000 rows):
+
+```terminal
+$ birdseed feed -r 10000
+```
+
+In this exampe we override the default of 1,000 rows and instead seed 10,000 rows.
+
+Note: What the row count really means is that we will seed row count amount of users, surveys
+and questions, but row count * 4 amount of choices and votes.
+
+### `migrate`
+
+To run migrations, use the migrate subcommand (this will update your database schema to the
+most recent schema).
+
+```terminal
+$ birdseed migrate
+```
+
+By default this runs migrations on all databases. To run migrations on only main run:
+
+```terminal
+$ birdseed migrate -d main
+```
+
+To run migrations only on the test database run:
+
+```terminal
+$ birdseed migrate -d test
 ```
 
 #### `clear`

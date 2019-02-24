@@ -42,25 +42,6 @@
 //!
 //! ## Features
 //!
-//! ### `feed`
-//!
-//! You can seed all databases with the `feed` subcommand:
-//!
-//! ```terminal
-//! $ birdseed feed
-//! ```
-//!
-//! We can specify a row count (overriding the default of 1000 rows):
-//!
-//! ```terminal
-//! $ birdseed feed -r 10000
-//! ```
-//!
-//! In this exampe we override the default of 1,000 rows and instead seed 10,000 rows.
-//!
-//! Note: What the row count really means is that we will seed row count amount of users, surveys
-//! and questions, but row count * 4 amount of choices and votes.
-//!
 //! ### `setup`
 //!
 //! You can setup the main libellis and libellis_test databases with this subcommand.  It will
@@ -86,6 +67,26 @@
 //! `rebuild` by default will rebuild all tables in both your main and test databases. If you would
 //! like to specify to only rebuild one database, pass in 'main' or 'test' to the -database
 //! argument flag:
+//!
+//!
+//! ### `feed`
+//!
+//! You can seed all databases with the `feed` subcommand:
+//!
+//! ```terminal
+//! $ birdseed feed
+//! ```
+//!
+//! We can specify a row count (overriding the default of 1000 rows):
+//!
+//! ```terminal
+//! $ birdseed feed -r 10000
+//! ```
+//!
+//! In this exampe we override the default of 1,000 rows and instead seed 10,000 rows.
+//!
+//! Note: What the row count really means is that we will seed row count amount of users, surveys
+//! and questions, but row count * 4 amount of choices and votes.
 //!
 //! ```terminal
 //! $ birdseed rebuild -database main
