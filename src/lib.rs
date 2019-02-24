@@ -42,25 +42,6 @@
 //!
 //! ## Features
 //!
-//! ### `feed`
-//!
-//! You can seed all databases with the `feed` subcommand:
-//!
-//! ```terminal
-//! $ birdseed feed
-//! ```
-//!
-//! We can specify a row count (overriding the default of 1000 rows):
-//!
-//! ```terminal
-//! $ birdseed feed -r 10000
-//! ```
-//!
-//! In this exampe we override the default of 1,000 rows and instead seed 10,000 rows.
-//!
-//! Note: What the row count really means is that we will seed row count amount of users, surveys
-//! and questions, but row count * 4 amount of choices and votes.
-//!
 //! ### `setup`
 //!
 //! You can setup the main libellis and libellis_test databases with this subcommand.  It will
@@ -86,6 +67,26 @@
 //! `rebuild` by default will rebuild all tables in both your main and test databases. If you would
 //! like to specify to only rebuild one database, pass in 'main' or 'test' to the -database
 //! argument flag:
+//!
+//!
+//! ### `feed`
+//!
+//! You can seed all databases with the `feed` subcommand:
+//!
+//! ```terminal
+//! $ birdseed feed
+//! ```
+//!
+//! We can specify a row count (overriding the default of 1000 rows):
+//!
+//! ```terminal
+//! $ birdseed feed -r 10000
+//! ```
+//!
+//! In this exampe we override the default of 1,000 rows and instead seed 10,000 rows.
+//!
+//! Note: What the row count really means is that we will seed row count amount of users, surveys
+//! and questions, but row count * 4 amount of choices and votes.
 //!
 //! ```terminal
 //! $ birdseed rebuild -database main
@@ -154,6 +155,8 @@ use std::io;
 use std::io::ErrorKind::InvalidInput;
 use structopt::StructOpt;
 
+use diesel_geography::types::GeogPoint;
+
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 
@@ -162,8 +165,8 @@ use rayon::prelude::*;
 use indicatif::{ProgressBar, ProgressStyle};
 
 mod models;
-mod schema;
 mod pg_pool;
+mod schema;
 
 pub use pg_pool::DbConn;
 pub use pg_pool::Pool;
@@ -171,7 +174,8 @@ pub use pg_pool::Pool;
 embed_migrations!("./migrations");
 
 use self::models::{
-    Choice, NewChoice, NewQuestion, NewSurvey, NewUser, NewVote, Question, Survey, User, Vote, Category, NewCategory
+    Category, Choice, NewCategory, NewChoice, NewQuestion, NewSurvey, NewUser, NewVote, Question,
+    Survey, User, Vote,
 };
 
 /**
@@ -189,6 +193,14 @@ pub enum Birdseed {
     #[structopt(name = "feed")]
     /// Seeds random data into all tables
     Feed {
+        /// How many rows to inject
+        #[structopt(short = "r", long = "rows", default_value = "1000")]
+        row_count: u32,
+    },
+
+    #[structopt(name = "icecream")]
+    /// Seeds random icrecream data into all tables
+    Icecream {
         /// How many rows to inject
         #[structopt(short = "r", long = "rows", default_value = "1000")]
         row_count: u32,
@@ -226,6 +238,7 @@ pub fn run(config: Birdseed) -> Result<(), Box<dyn Error>> {
         Birdseed::Feed { row_count } => populate_all(row_count),
         Birdseed::Rebuild { db } => rebuild(&db),
         Birdseed::Setup => setup(),
+        Birdseed::Icecream { row_count } => populate_icecream(row_count),
         Birdseed::Migrate { db } => migrate(&db),
         Birdseed::Clear => clear_all(),
     }
@@ -282,11 +295,86 @@ fn populate_all(row_count: u32) -> Result<(), Box<dyn Error>> {
 
     let _ = populate_categories(&pool, "TestCategory", &bar)?;
 
-
     let survey_ids = populate_surveys(&pool, &usernames, row_count, &bar)?;
     let question_ids = populate_questions(&pool, &survey_ids, row_count, &bar)?;
     let choice_ids = populate_choices(&pool, &question_ids, row_count, &bar)?;
     populate_votes(&pool, &usernames, &choice_ids, &bar)?;
+    bar.finish();
+    println!("\r\n             🐦 Birdseed has Finished Seeding! 🐦\r\n",);
+    Ok(())
+}
+
+// Kicks off populating all tables in main database and updating user
+// with visual progress bar along the way
+fn populate_icecream(row_count: u32) -> Result<(), Box<dyn Error>> {
+    // get the base url and append it with the db name
+    dotenv().ok();
+    let base_url = env::var("PSQL_URL")?;
+    env::set_var("DATABASE_URL", &format!("{}{}", base_url, "libellis"));
+
+    let pool = generate_pool();
+    println!("\r\n                  🐦 Seeding All Tables 🐦\r\n",);
+
+    let bar = ProgressBar::new((row_count * 9) as u64);
+    bar.set_style(
+        ProgressStyle::default_bar()
+            .template("[{elapsed_precise}] {bar:40.cyan/blue} {msg}")
+            .progress_chars("##-"),
+    );
+
+    let usernames = populate_users(&pool, row_count, &bar)?;
+
+    let _ = populate_categories(&pool, "food", &bar)?;
+
+    let mut survey_id = 0;
+
+    // scoped so the pool connection gets dropped automatically
+    {
+        let pool = pool.clone();
+        let conn = pool.get().unwrap();
+
+        let survey_title = "What is your favorite icecream?";
+
+        let cat = "food";
+
+        let survey = create_survey(&conn, &usernames[0], &survey_title, cat);
+
+        survey_id = survey.id;
+    }
+
+    let mut question_id = 0;
+    // question injection
+    {
+        let pool = pool.clone();
+        let conn = pool.get().unwrap();
+
+        let q_title = "What is your favorite icecream?";
+        let q_type = "multiple".to_string();
+
+        let question = create_question(&conn, survey_id, &q_type, &q_title);
+
+        question_id = question.id;
+    }
+
+    let choices = vec!["Strawberry", "Vanilla", "Chocolate"];
+    let mut choice_ids: Vec<i32> = Vec::new();
+
+    // choice injection
+    {
+        let pool = pool.clone();
+        let conn = pool.get().unwrap();
+
+        choice_ids = choices
+            .into_iter()
+            .map(|choice| {
+                let c_type = "text".to_string();
+                let choice_struct = create_choice(&conn, question_id, &c_type, choice);
+                choice_struct.id
+            })
+            .collect();
+    }
+
+    populate_icecream_votes(&pool, &usernames, &choice_ids, &bar)?;
     bar.finish();
     println!("\r\n             🐦 Birdseed has Finished Seeding! 🐦\r\n",);
     Ok(())
@@ -385,13 +473,15 @@ fn clear_all() -> Result<(), Box<dyn Error>> {
 // where a user has manually deleted some but not all of their tables. Open a PR
 // request if you have a better solution in mind.
 fn drop_all(conn: &PgConnection) {
-    let bar = ProgressBar::new(8);
+    let bar = ProgressBar::new(9);
     bar.set_style(
         ProgressStyle::default_bar()
             .template("[{elapsed_precise}] {bar:40.cyan/blue} {msg}")
             .progress_chars("##-"),
     );
 
+    conn.execute("DROP TABLE fences cascade");
+    bar.inc(1);
     conn.execute("DROP VIEW users_votes");
     bar.inc(1);
     conn.execute("DROP TABLE votes");
@@ -467,30 +557,33 @@ fn populate_users(
 ) -> Result<Vec<String>, Box<dyn Error>> {
     bar.set_message(&format!("Seeding {} users", row_count));
 
-    let usernames: Vec<String> = (0..row_count).into_par_iter().map(|_| {
-        let pool = pool.clone();
+    let usernames: Vec<String> = (0..row_count)
+        .into_par_iter()
+        .map(|_| {
+            let pool = pool.clone();
 
-        let conn = pool.get().unwrap();
+            let conn = pool.get().unwrap();
 
-        let user = format!(
-            "{}{}",
-            fake!(Internet.user_name),
-            fake!(Number.between(90, 9999))
-        );
-        let pw = format!(
-            "{}{}",
-            fake!(Name.name),
-            fake!(Number.between(10000, 99999))
-        );
-        let em = format!("{}@gmail.com", user);
-        let first = format!("{}", fake!(Name.first_name));
-        let last = format!("{}", fake!(Name.last_name));
+            let user = format!(
+                "{}{}",
+                fake!(Internet.user_name),
+                fake!(Number.between(90, 9999))
+            );
+            let pw = format!(
+                "{}{}",
+                fake!(Name.name),
+                fake!(Number.between(10000, 99999))
+            );
+            let em = format!("{}@gmail.com", user);
+            let first = format!("{}", fake!(Name.first_name));
+            let last = format!("{}", fake!(Name.last_name));
 
-        create_user(&conn, &user, &pw, &em, &first, &last);
-        bar.inc(1);
+            create_user(&conn, &user, &pw, &em, &first, &last);
+            bar.inc(1);
 
-		user
-    }).collect();
+            user
+        })
+        .collect();
 
     Ok(usernames)
 }
@@ -507,7 +600,6 @@ fn populate_categories(
     let conn = pool.get().unwrap();
 
     create_category(&conn, title);
-    
 
     Ok(title.to_string())
 }
@@ -522,20 +614,23 @@ fn populate_surveys(
 ) -> Result<Vec<i32>, Box<dyn Error>> {
     bar.set_message(&format!("Seeding {} surveys", row_count));
 
-    let survey_ids: Vec<i32> = authors.par_iter().map(|auth| {
-        let pool = pool.clone();
-        let conn = pool.get().unwrap();
+    let survey_ids: Vec<i32> = authors
+        .par_iter()
+        .map(|auth| {
+            let pool = pool.clone();
+            let conn = pool.get().unwrap();
 
-        let survey_title = format!("{}", fake!(Lorem.sentence(4, 8)));
+            let survey_title = format!("{}", fake!(Lorem.sentence(4, 8)));
 
-        // TODO: Change this later to not be a static category field
-        let cat = "TestCategory";
+            // TODO: Change this later to not be a static category field
+            let cat = "TestCategory";
 
-        let survey = create_survey(&conn, &auth, &survey_title, cat);
-        bar.inc(1);
+            let survey = create_survey(&conn, &auth, &survey_title, cat);
+            bar.inc(1);
 
-        survey.id
-    }).collect();
+            survey.id
+        })
+        .collect();
 
     Ok(survey_ids)
 }
@@ -550,17 +645,20 @@ fn populate_questions(
 ) -> Result<Vec<i32>, Box<dyn Error>> {
     bar.set_message(&format!("Seeding {} questions", row_count));
 
-    let question_ids: Vec<i32> = survey_ids.par_iter().map(|s_id| {
-        let pool = pool.clone();
-        let conn = pool.get().unwrap();
+    let question_ids: Vec<i32> = survey_ids
+        .par_iter()
+        .map(|s_id| {
+            let pool = pool.clone();
+            let conn = pool.get().unwrap();
 
-        let q_title = format!("{}", fake!(Lorem.sentence(3, 7)));
-        let q_type = "multiple".to_string();
-        let question = create_question(&conn, *s_id, &q_type, &q_title);
-        bar.inc(1);
+            let q_title = format!("{}", fake!(Lorem.sentence(3, 7)));
+            let q_type = "multiple".to_string();
+            let question = create_question(&conn, *s_id, &q_type, &q_title);
+            bar.inc(1);
 
-        question.id
-    }).collect();
+            question.id
+        })
+        .collect();
 
     Ok(question_ids)
 }
@@ -575,21 +673,26 @@ fn populate_choices(
 ) -> Result<Vec<i32>, Box<dyn Error>> {
     bar.set_message(&format!("Seeding {} choices", (row_count * 4)));
 
-    let choice_ids: Vec<i32> = question_ids.par_iter().map(|q_id| {
+    let choice_ids: Vec<i32> = question_ids
+        .par_iter()
+        .map(|q_id| {
+            // For each question, inject 4 random text choices
+            (0..4)
+                .into_par_iter()
+                .map(|_| {
+                    let pool = pool.clone();
+                    let conn = pool.get().unwrap();
 
-        // For each question, inject 4 random text choices
-        (0..4).into_par_iter().map(|_| {
-            let pool = pool.clone();
-            let conn = pool.get().unwrap();
-
-            let c_title = format!("{}", fake!(Lorem.sentence(1, 4)));
-            let c_type = "text".to_string();
-            let choice = create_choice(&conn, *q_id, &c_type, &c_title);
-            bar.inc(1);
-            choice.id
-         }).collect()
-
-    }).collect::<Vec<Vec<i32>>>().concat();
+                    let c_title = format!("{}", fake!(Lorem.sentence(1, 4)));
+                    let c_type = "text".to_string();
+                    let choice = create_choice(&conn, *q_id, &c_type, &c_title);
+                    bar.inc(1);
+                    choice.id
+                })
+                .collect()
+        })
+        .collect::<Vec<Vec<i32>>>()
+        .concat();
 
     Ok(choice_ids)
 }
@@ -624,10 +727,79 @@ fn populate_votes(
                 let conn = pool.get().unwrap();
 
                 let c_id = choice_ids[choice_slice[(i + 1) * j]];
-                create_vote(&conn, c_id, name, 1);
+
+                // placeholder - randomize later
+                let geo_pnt: GeogPoint = gen_rand_geo();
+
+                let fence_tit = "Nob Hill";
+
+                create_vote(&conn, c_id, name, 1, geo_pnt, fence_tit);
                 bar.inc(1);
             });
         }
+    });
+
+    Ok(())
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct GeoBox {
+    pub x_range: (f64, f64),
+    pub y_range: (f64, f64),
+}
+
+use rand::Rng;
+
+fn gen_rand_geo() -> GeogPoint {
+    let mut rng = rand::thread_rng();
+    let box1 = GeoBox {
+        x_range: (-122.4378204345703, -122.40348815917969),
+        y_range: (37.77831314799669, 37.80381638220768),
+    };
+
+    let box2 = GeoBox {
+        x_range: (-122.50579833984375, -122.39250183105467),
+        y_range: (37.74248523826606, 37.783740105227224),
+    };
+
+    let boxes: Vec<GeoBox> = vec![box1, box2];
+
+    // generate random number between 0 and 1 and round to figure out which index to pick
+    // then generate random ranges between the bounds for that box and return a new GeogPoint
+    let index_choice = rng.gen::<f64>().round() as usize;
+    let choosen_box = boxes[index_choice].clone();
+
+    let mut rng1 = rand::thread_rng();
+    let mut rng2 = rand::thread_rng();
+    GeogPoint {
+        x: rng1.gen_range(choosen_box.x_range.0, choosen_box.x_range.1),
+        y: rng2.gen_range(choosen_box.y_range.0, choosen_box.y_range.1),
+        srid: Some(4326),
+    }
+}
+
+fn populate_icecream_votes(
+    pool: &Pool,
+    authors: &Vec<String>,
+    choice_ids: &Vec<i32>,
+    bar: &ProgressBar,
+) -> Result<(), Box<dyn Error>> {
+    bar.set_message(&format!("{} users are voting", (authors.len())));
+
+    authors.par_iter().for_each(|author| {
+        let mut rng = thread_rng();
+        let pool = pool.clone();
+        let conn = pool.get().unwrap();
+
+        let c_id = choice_ids[rng.gen_range(0, 3) as usize];
+
+        // placeholder - randomize later
+        let geo_pnt: GeogPoint = gen_rand_geo();
+
+        let fence_tit = "Nob Hill";
+
+        create_vote(&conn, c_id, author, 1, geo_pnt, fence_tit);
+        bar.inc(1);
     });
 
     Ok(())
@@ -682,7 +854,12 @@ fn create_user<'a>(
         .expect("Error saving new user")
 }
 
-fn create_survey<'a>(conn: &PgConnection, auth: &'a str, survey_title: &'a str, cat: &'a str) -> Survey {
+fn create_survey<'a>(
+    conn: &PgConnection,
+    auth: &'a str,
+    survey_title: &'a str,
+    cat: &'a str,
+) -> Survey {
     use self::schema::surveys;
 
     let new_survey = NewSurvey {
@@ -733,13 +910,22 @@ fn create_choice<'a>(conn: &PgConnection, q_id: i32, c_type: &'a str, c_title: &
         .expect("Error saving new choice")
 }
 
-fn create_vote<'a>(conn: &PgConnection, c_id: i32, name: &'a str, points: i32) -> Vote {
+fn create_vote<'a>(
+    conn: &PgConnection,
+    c_id: i32,
+    name: &'a str,
+    points: i32,
+    geo_pnt: GeogPoint,
+    fence_tit: &'a str,
+) -> Vote {
     use self::schema::votes;
 
     let new_vote = NewVote {
         choice_id: c_id,
         username: name,
         score: points,
+        geo: geo_pnt,
+        fence_title: fence_tit,
     };
 
     diesel::insert_into(votes::table)
@@ -751,9 +937,7 @@ fn create_vote<'a>(conn: &PgConnection, c_id: i32, name: &'a str, points: i32) -
 fn create_category<'a>(conn: &PgConnection, title: &'a str) -> Category {
     use self::schema::categories;
 
-    let new_category = NewCategory {
-        title,
-    };
+    let new_category = NewCategory { title };
 
     diesel::insert_into(categories::table)
         .values(&new_category)
