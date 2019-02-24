@@ -1,1 +1,0 @@
-initSidebarItems({"fn":[["colors_enabled","Returns `true` if colors should be enabled."],["configure_terminal","Configures the terminal for ANSI color support."],["set_colors_enabled","Forces colorization on or off."]],"mod":[["terminfo","Auxiliary terminal information."]]});
