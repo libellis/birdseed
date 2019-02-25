@@ -68,6 +68,24 @@
 //! like to specify to only rebuild one database, pass in 'main' or 'test' to the -database
 //! argument flag:
 //!
+//! ### `fences`
+//!
+//! You can load in fence data from a geojson file with the fences subcommand:
+//!
+//! ```terminal
+//! $ birdseed fences
+//! ```
+//!
+//! By default it looks for a file called `fences.json` in the data folder from the root of this
+//! crate. This folder only exists if you cloned the repo.  To specify a filepath yourself pass the
+//! -f or -file flag after the fences subcommand:
+//!
+//! ```terminal
+//! $ birdseed fences -f BerkeleyNeighborhoods.json
+//! ```
+//!
+//! Note: This only works if you have a fences table - which would have been setup for you from the
+//! most recent migrations when running `birdseed setup` or `birdseed migrate`.
 //!
 //! ### `feed`
 //!
@@ -126,6 +144,24 @@
 //! ```terminal
 //! $ birdseed clear
 //! ```
+//!
+//! ### Icecream
+//!
+//! For fun and profit you can seed the database with an row count amount of users, a single poll
+//! about icecream, and then populate that poll with fake votes from your newly faked user pool,
+//! and have all of their votes counted from legitimate randomized locations within the city of San
+//! Francisco.
+//!
+//! ```terminal
+//! $ birdseed icecream
+//! ```
+//!
+//! By default the row count is 1000, and can be overriden in the same way as when using the `feed`
+//! subcommand:
+//!
+//! ```terminal
+//! $ birdseed icecream -r 10000
+//! ```
 
 #[macro_use]
 extern crate structopt;
@@ -143,6 +179,9 @@ extern crate fake;
 extern crate indicatif;
 extern crate rand;
 
+use std::fs::File;
+use std::io::prelude::*;
+
 use diesel::pg::PgConnection;
 use diesel::prelude::*;
 use dotenv::dotenv;
@@ -154,6 +193,8 @@ use std::error::Error;
 use std::io;
 use std::io::ErrorKind::InvalidInput;
 use structopt::StructOpt;
+
+use geojson::{Feature, GeoJson, Geometry, Value, FeatureCollection};
 
 use diesel_geography::types::GeogPoint;
 
@@ -210,8 +251,8 @@ pub enum Birdseed {
     /// Loads in fences from a geojson file
     Fences {
         /// The file name to read from - default if not supplied is 
-        #[structopt(short = "r", long = "rows", default_value = "")]
-        row_count: u32,
+        #[structopt(short = "f", long = "file", default_value = "data/fences.json")]
+        filepath: String,
     },
 
     #[structopt(name = "setup")]
@@ -247,6 +288,7 @@ pub fn run(config: Birdseed) -> Result<(), Box<dyn Error>> {
         Birdseed::Rebuild { db } => rebuild(&db),
         Birdseed::Setup => setup(),
         Birdseed::Icecream { row_count } => populate_icecream(row_count),
+        Birdseed::Fences { filepath } => load_fences(filepath),
         Birdseed::Migrate { db } => migrate(&db),
         Birdseed::Clear => clear_all(),
     }
@@ -279,6 +321,52 @@ fn drop_database(database: &str) {
         .arg(database)
         .output()
         .expect("failed to drop database");
+}
+
+fn load_fences(filepath: String) -> Result<(), Box<dyn Error>> {
+    use std::io::BufReader;
+
+    dotenv().ok();
+    let base_url = env::var("PSQL_URL")?;
+    env::set_var("DATABASE_URL", &format!("{}{}", base_url, "libellis"));
+
+    let pool = generate_pool();
+    
+    // read json file into a string
+    let file = File::open(filepath)?;
+    let mut buf_reader = BufReader::new(file);
+    let mut contents = String::new();
+    buf_reader.read_to_string(&mut contents)?;
+
+    // load geo data into fences table
+    let conn = pool.get().unwrap();
+
+    load_geo_data(&conn, &contents)?;
+
+    Ok(())
+}
+
+fn load_geo_data(conn: &PgConnection, geojson_str: &String) -> Result<(), Box<dyn Error>> {
+    use diesel::dsl::sql_query;
+    
+    match geojson_str.parse::<GeoJson>().unwrap() {
+        GeoJson::FeatureCollection(feat_col) => (
+            for feature in feat_col.features {
+                let property = feature.properties.unwrap();
+                let title = property.get("nhood").unwrap().to_string();
+                let trimmed_title = title.split('"').collect::<Vec<&str>>()[1];
+                let geo_level = 1;
+                let geojson = feature.geometry.unwrap();
+
+                let query_str = format!("INSERT INTO fences (title, geo_level, geo) VALUES ('{}', '{}', ST_GeomFromGeoJSON('{}'));", trimmed_title, geo_level, GeoJson::from(geojson).to_string());
+
+                sql_query(query_str).execute(conn)?;
+            }
+        ),
+        _ => (),
+    }
+    
+    Ok(())
 }
 
 // Kicks off populating all tables in main database and updating user
