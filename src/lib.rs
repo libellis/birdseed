@@ -68,6 +68,24 @@
 //! like to specify to only rebuild one database, pass in 'main' or 'test' to the -database
 //! argument flag:
 //!
+//! ### `fences`
+//!
+//! You can load in fence data from a geojson file with the fences subcommand:
+//!
+//! ```terminal
+//! $ birdseed fences
+//! ```
+//!
+//! By default it looks for a file called `fences.json` in the data folder from the root of this
+//! crate. This folder only exists if you cloned the repo.  To specify a filepath yourself pass the
+//! -f or -file flag after the fences subcommand:
+//!
+//! ```terminal
+//! $ birdseed fences -f BerkeleyNeighborhoods.json
+//! ```
+//!
+//! Note: This only works if you have a fences table - which would have been setup for you from the
+//! most recent migrations when running `birdseed setup` or `birdseed migrate`.
 //!
 //! ### `feed`
 //!
