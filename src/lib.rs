@@ -206,6 +206,14 @@ pub enum Birdseed {
         row_count: u32,
     },
 
+    #[structopt(name = "fences")]
+    /// Loads in fences from a geojson file
+    Fences {
+        /// The file name to read from - default if not supplied is 
+        #[structopt(short = "r", long = "rows", default_value = "")]
+        row_count: u32,
+    },
+
     #[structopt(name = "setup")]
     /// Builds both libellis main and test databases and runs migrations
     Setup,
