@@ -140,3 +140,21 @@ You can clear all tables with the `clear` subcommand:
 ```terminal
 $ birdseed clear
 ```
+
+### Icecream
+
+For fun and profit you can seed the database with an row count amount of users, a single poll
+about icecream, and then populate that poll with fake votes from your newly faked user pool,
+and have all of their votes counted from legitimate randomized locations within the city of San
+Francisco.
+
+```terminal
+$ birdseed icecream
+```
+
+By default the row count is 1000, and can be overriden in the same way as when using the `feed`
+subcommand:
+
+```terminal
+$ birdseed icecream -r 10000
+```
