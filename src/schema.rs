@@ -1,6 +1,5 @@
 table! {
     use diesel::sql_types::*;
-    use diesel_geography::sql_types::*;
 
     categories (title) {
         title -> Text,
@@ -9,7 +8,6 @@ table! {
 
 table! {
     use diesel::sql_types::*;
-    use diesel_geography::sql_types::*;
 
     choices (id) {
         id -> Int4,
@@ -33,7 +31,6 @@ table! {
 
 table! {
     use diesel::sql_types::*;
-    use diesel_geography::sql_types::*;
 
     questions (id) {
         id -> Int4,
@@ -45,7 +42,6 @@ table! {
 
 table! {
     use diesel::sql_types::*;
-    use diesel_geography::sql_types::*;
 
     spatial_ref_sys (srid) {
         srid -> Int4,
@@ -58,7 +54,6 @@ table! {
 
 table! {
     use diesel::sql_types::*;
-    use diesel_geography::sql_types::*;
 
     surveys (id) {
         id -> Int4,
@@ -74,7 +69,6 @@ table! {
 
 table! {
     use diesel::sql_types::*;
-    use diesel_geography::sql_types::*;
 
     users (username) {
         username -> Text,

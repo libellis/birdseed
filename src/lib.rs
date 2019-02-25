@@ -163,7 +163,6 @@
 //! $ birdseed icecream -r 10000
 //! ```
 
-#[macro_use]
 extern crate structopt;
 
 #[macro_use]
@@ -194,7 +193,7 @@ use std::io;
 use std::io::ErrorKind::InvalidInput;
 use structopt::StructOpt;
 
-use geojson::{Feature, GeoJson, Geometry, Value, FeatureCollection};
+use geojson::GeoJson;
 
 use diesel_geography::types::GeogPoint;
 
@@ -422,7 +421,7 @@ fn populate_icecream(row_count: u32) -> Result<(), Box<dyn Error>> {
 
     let _ = populate_categories(&pool, "food", &bar)?;
 
-    let mut survey_id = 0;
+    let survey_id;
 
     // scoped so the pool connection gets dropped automatically
     {
@@ -438,7 +437,7 @@ fn populate_icecream(row_count: u32) -> Result<(), Box<dyn Error>> {
         survey_id = survey.id;
     }
 
-    let mut question_id = 0;
+    let question_id;
     // question injection
     {
         let pool = pool.clone();
@@ -453,7 +452,7 @@ fn populate_icecream(row_count: u32) -> Result<(), Box<dyn Error>> {
     }
 
     let choices = vec!["Strawberry", "Vanilla", "Chocolate"];
-    let mut choice_ids: Vec<i32> = Vec::new();
+    let choice_ids;
 
     // choice injection
     {
@@ -568,6 +567,7 @@ fn clear_all() -> Result<(), Box<dyn Error>> {
 // ALL regardless so we are ready for a rebuild.  This takes care of situations
 // where a user has manually deleted some but not all of their tables. Open a PR
 // request if you have a better solution in mind.
+#[allow(unused_must_use)]
 fn drop_all(conn: &PgConnection) {
     let bar = ProgressBar::new(9);
     bar.set_style(

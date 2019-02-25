@@ -1,7 +1,5 @@
 use super::schema::*;
-use chrono::naive::{NaiveDate, NaiveDateTime};
 use diesel_geography::types::GeogPoint;
-use geo::{MultiPolygon, Polygon};
 use std::time::SystemTime;
 
 #[derive(Queryable)]
