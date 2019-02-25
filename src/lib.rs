@@ -313,24 +313,22 @@ fn load_fences(filepath: String) -> Result<(), Box<dyn Error>> {
 fn load_geo_data(conn: &PgConnection, geojson_str: &String) -> Result<(), Box<dyn Error>> {
     use diesel::dsl::sql_query;
     
-
     match geojson_str.parse::<GeoJson>().unwrap() {
         GeoJson::FeatureCollection(feat_col) => (
             for feature in feat_col.features {
                 let property = feature.properties.unwrap();
-                let title = property.get("nhood").unwrap();
+                let title = property.get("nhood").unwrap().to_string();
+                let trimmed_title = title.split('"').collect::<Vec<&str>>()[1];
                 let geo_level = 1;
                 let geojson = feature.geometry.unwrap();
 
-                let query_str = format!("INSERT INTO fences (title, geo_level, geo)
-                                VALUES ({}, {}, ST_GeomFromGeoJSON{})", title, geo_level, GeoJson::from(geojson).to_string());
+                let query_str = format!("INSERT INTO fences (title, geo_level, geo) VALUES ('{}', '{}', ST_GeomFromGeoJSON('{}'));", trimmed_title, geo_level, GeoJson::from(geojson).to_string());
 
                 sql_query(query_str).execute(conn)?;
             }
         ),
         _ => (),
     }
-
     
     Ok(())
 }
