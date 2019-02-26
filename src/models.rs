@@ -103,6 +103,21 @@ pub struct NewVote<'a> {
     pub fence_title: &'a str,
 }
 
+#[derive(Queryable)]
+pub struct Fence {
+    pub title: String,
+    pub geo_level: i32,
+    pub geo: GeogPoint,
+}
+
+#[derive(Insertable)]
+#[table_name = "fences"]
+pub struct NewFence<'a> {
+    pub title: &'a str,
+    pub geo_level: i32,
+    pub geo: GeogPoint,
+}
+
 #[derive(Insertable)]
 #[table_name = "categories"]
 pub struct NewCategory<'a> {

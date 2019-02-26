@@ -193,7 +193,8 @@ use std::io;
 use std::io::ErrorKind::InvalidInput;
 use structopt::StructOpt;
 
-use geojson::GeoJson;
+use geojson::{ GeoJson, Geometry };
+use geojson::Value::{ self, Point };
 
 use diesel_geography::types::GeogPoint;
 
@@ -215,7 +216,7 @@ embed_migrations!("./migrations");
 
 use self::models::{
     Category, Choice, NewCategory, NewChoice, NewQuestion, NewSurvey, NewUser, NewVote, Question,
-    Survey, User, Vote,
+    Survey, User, Vote, Fence, NewFence
 };
 
 /**
@@ -892,13 +893,28 @@ fn populate_icecream_votes(
         // placeholder - randomize later
         let geo_pnt: GeogPoint = gen_rand_geo();
 
-        let fence_tit = "Nob Hill";
+        let geo_val = Point(vec![geo_pnt.x, geo_pnt.y]);
 
-        create_vote(&conn, c_id, author, 1, geo_pnt, fence_tit);
+        let fence_tit = get_fence_by_coords(&conn, geo_val).unwrap();
+
+        create_vote(&conn, c_id, author, 1, geo_pnt, &fence_tit);
         bar.inc(1);
     });
 
     Ok(())
+}
+
+fn get_fence_by_coords(conn: &PgConnection, coords: Value) -> Result<String, Box<dyn Error>> {
+    use diesel::dsl::sql;
+    use self::schema::fences::dsl::*;
+
+    let geo_json = GeoJson::from(Geometry::new(coords));
+
+    let where_str = format!("ST_Intersects(ST_GeomFromGeoJSON('{}'), geo)", geo_json.to_string());
+    
+    let fence: String = fences.select(title).filter(sql(&where_str)).first(conn)?;
+    
+    Ok(fence)
 }
 
 // Establishes a connection to the libellis postgres database on your machine, as specified by your
