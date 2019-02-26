@@ -212,6 +212,8 @@ mod schema;
 pub use pg_pool::DbConn;
 pub use pg_pool::Pool;
 
+mod db;
+
 embed_migrations!("./migrations");
 
 use self::models::{
@@ -387,7 +389,7 @@ fn populate_all(row_count: u32) -> Result<(), Box<dyn Error>> {
             .progress_chars("##-"),
     );
 
-    let usernames = populate_users(&pool, row_count, &bar)?;
+    let usernames = db::users::populate_users(&pool, row_count, &bar)?;
 
     let _ = populate_categories(&pool, "TestCategory", &bar)?;
 
