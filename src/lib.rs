@@ -219,7 +219,6 @@ use db::*;
 embed_migrations!("./migrations");
 
 use self::models::vote::{ Vote, NewVote };
-use self::models::category::{ Category, NewCategory };
 
 /**
  * DEFINED ERRORS
@@ -391,7 +390,7 @@ fn populate_all(row_count: u32) -> Result<(), Box<dyn Error>> {
 
     let usernames = users::populate(&pool, row_count, &bar)?;
 
-    let _ = populate_categories(&pool, "TestCategory", &bar)?;
+    let _ = categories::populate(&pool, "TestCategory", &bar)?;
 
     let survey_ids = surveys::populate(&pool, &usernames, row_count, &bar)?;
     let question_ids = questions::populate(&pool, &survey_ids, row_count, &bar)?;
@@ -422,7 +421,7 @@ fn populate_icecream(row_count: u32) -> Result<(), Box<dyn Error>> {
 
     let usernames = users::populate(&pool, row_count, &bar)?;
 
-    let _ = populate_categories(&pool, "food", &bar)?;
+    let _ = categories::populate(&pool, "food", &bar)?;
 
     let survey_id;
 
@@ -652,22 +651,6 @@ fn rebuild_test(base_url: &str) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-// TODO: UPDATE THIS TO POPULATE RANDOM CHOICES
-fn populate_categories(
-    pool: &Pool,
-    title: &str,
-    bar: &ProgressBar,
-) -> Result<String, Box<dyn Error>> {
-    bar.set_message(&format!("Seeding 1 Test Category"));
-
-    let pool = pool.clone();
-    let conn = pool.get().unwrap();
-
-    create_category(&conn, title);
-
-    Ok(title.to_string())
-}
-
 // Populates the votes table with real votes from our newly inserted random users who vote on
 // choices in a semi-randomish way (not that random really)
 fn populate_votes(
@@ -835,17 +818,6 @@ fn create_vote<'a>(
 
     diesel::insert_into(votes::table)
         .values(&new_vote)
-        .get_result(conn)
-        .expect("Error saving new vote")
-}
-
-fn create_category<'a>(conn: &PgConnection, title: &'a str) -> Category {
-    use self::schema::categories;
-
-    let new_category = NewCategory { title };
-
-    diesel::insert_into(categories::table)
-        .values(&new_category)
         .get_result(conn)
         .expect("Error saving new vote")
 }
