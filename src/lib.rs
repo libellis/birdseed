@@ -218,7 +218,6 @@ use db::*;
 
 embed_migrations!("./migrations");
 
-use self::models::choice::{ Choice, NewChoice };
 use self::models::vote::{ Vote, NewVote };
 use self::models::category::{ Category, NewCategory };
 
@@ -396,7 +395,7 @@ fn populate_all(row_count: u32) -> Result<(), Box<dyn Error>> {
 
     let survey_ids = surveys::populate(&pool, &usernames, row_count, &bar)?;
     let question_ids = questions::populate(&pool, &survey_ids, row_count, &bar)?;
-    let choice_ids = populate_choices(&pool, &question_ids, row_count, &bar)?;
+    let choice_ids = choices::populate(&pool, &question_ids, row_count, &bar)?;
     populate_votes(&pool, &usernames, &choice_ids, &bar)?;
     bar.finish();
     println!("\r\n             🐦 Birdseed has Finished Seeding! 🐦\r\n",);
@@ -468,7 +467,7 @@ fn populate_icecream(row_count: u32) -> Result<(), Box<dyn Error>> {
             .into_iter()
             .map(|choice| {
                 let c_type = "text".to_string();
-                let choice_struct = create_choice(&conn, question_id, &c_type, choice);
+                let choice_struct = choices::create(&conn, question_id, &c_type, choice);
                 choice_struct.id
             })
             .collect();
@@ -669,40 +668,6 @@ fn populate_categories(
     Ok(title.to_string())
 }
 
-// Populates choices table with row_count * 4 random choices ensuring that each question relates to
-// an existing survey
-fn populate_choices(
-    pool: &Pool,
-    question_ids: &Vec<i32>,
-    row_count: u32,
-    bar: &ProgressBar,
-) -> Result<Vec<i32>, Box<dyn Error>> {
-    bar.set_message(&format!("Seeding {} choices", (row_count * 4)));
-
-    let choice_ids: Vec<i32> = question_ids
-        .par_iter()
-        .map(|q_id| {
-            // For each question, inject 4 random text choices
-            (0..4)
-                .into_par_iter()
-                .map(|_| {
-                    let pool = pool.clone();
-                    let conn = pool.get().unwrap();
-
-                    let c_title = format!("{}", fake!(Lorem.sentence(1, 4)));
-                    let c_type = "text".to_string();
-                    let choice = create_choice(&conn, *q_id, &c_type, &c_title);
-                    bar.inc(1);
-                    choice.id
-                })
-                .collect()
-        })
-        .collect::<Vec<Vec<i32>>>()
-        .concat();
-
-    Ok(choice_ids)
-}
-
 // Populates the votes table with real votes from our newly inserted random users who vote on
 // choices in a semi-randomish way (not that random really)
 fn populate_votes(
@@ -850,21 +815,6 @@ fn generate_pool() -> Pool {
  * The following series of functions are very simple - each one simply creates a single
  * user/survey/question/choice/vote
  */
-fn create_choice<'a>(conn: &PgConnection, q_id: i32, c_type: &'a str, c_title: &'a str) -> Choice {
-    use self::schema::choices;
-
-    let new_choice = NewChoice {
-        question_id: q_id,
-        content_type: c_type,
-        title: c_title,
-    };
-
-    diesel::insert_into(choices::table)
-        .values(&new_choice)
-        .get_result(conn)
-        .expect("Error saving new choice")
-}
-
 fn create_vote<'a>(
     conn: &PgConnection,
     c_id: i32,
