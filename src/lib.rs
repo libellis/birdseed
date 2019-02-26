@@ -578,6 +578,7 @@ fn drop_all(conn: &PgConnection) {
         "DROP VIEW users_votes",
         "DROP TABLE votes",
         "DROP TABLE fences cascade",
+        "DROP EXTENSION postgis",
         "DROP TABLE choices",
         "DROP TABLE questions",
         "DROP TABLE surveys",
