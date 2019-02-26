@@ -353,6 +353,9 @@ fn load_geo_data(pool: &Pool, geojson_str: &String) -> Result<(), Box<dyn Error>
                 let conn = pool.get().unwrap();
                 let property = feature.properties.unwrap();
                 let title = property.get("nhood").unwrap().to_string();
+
+                // for some reason serde Value types wrap their strings in double quotes - this
+                // removes the quotes - look into if there's a more natural way to handle this
                 let trimmed_title = title.split('"').collect::<Vec<&str>>()[1];
                 let geo_level = 1;
                 let geojson = feature.geometry.unwrap();
@@ -422,6 +425,7 @@ fn populate_icecream(row_count: u32) -> Result<(), Box<dyn Error>> {
     let survey_id;
 
     // scoped so the pool connection gets dropped automatically
+    // inject the icecream survey
     {
         let pool = pool.clone();
         let conn = pool.get().unwrap();
@@ -436,7 +440,7 @@ fn populate_icecream(row_count: u32) -> Result<(), Box<dyn Error>> {
     }
 
     let question_id;
-    // question injection
+    // inject the one question for the icecream survey
     {
         let pool = pool.clone();
         let conn = pool.get().unwrap();
@@ -452,7 +456,7 @@ fn populate_icecream(row_count: u32) -> Result<(), Box<dyn Error>> {
     let choices = vec!["Strawberry", "Vanilla", "Chocolate"];
     let choice_ids;
 
-    // choice injection
+    // inject our icecream flavors for fake users to fake vote on
     {
         let pool = pool.clone();
         let conn = pool.get().unwrap();
@@ -467,6 +471,7 @@ fn populate_icecream(row_count: u32) -> Result<(), Box<dyn Error>> {
             .collect();
     }
 
+    // populate fake votes with our newly created fake users
     populate_icecream_votes(&pool, &usernames, &choice_ids, &bar)?;
     bar.finish();
     println!("\r\n             🐦 Birdseed has Finished Seeding! 🐦\r\n",);
