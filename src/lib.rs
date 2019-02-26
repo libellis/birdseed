@@ -536,7 +536,7 @@ fn clear_all() -> Result<(), Box<dyn Error>> {
 
     println!("\r\n                  🐦 Clearing all Tables 🐦\r\n");
 
-    let bar = ProgressBar::new(5);
+    let bar = ProgressBar::new(7);
     bar.set_style(
         ProgressStyle::default_bar()
             .template("[{elapsed_precise}] {bar:40.cyan/blue} {msg}")
@@ -544,6 +544,8 @@ fn clear_all() -> Result<(), Box<dyn Error>> {
     );
 
     diesel::delete(votes::table).execute(&conn)?;
+    bar.inc(1);
+    diesel::delete(fences::table).execute(&conn)?;
     bar.inc(1);
     diesel::delete(choices::table).execute(&conn)?;
     bar.inc(1);
@@ -570,7 +572,7 @@ fn clear_all() -> Result<(), Box<dyn Error>> {
 // request if you have a better solution in mind.
 #[allow(unused_must_use)]
 fn drop_all(conn: &PgConnection) {
-    let bar = ProgressBar::new(9);
+    let bar = ProgressBar::new(10);
     bar.set_style(
         ProgressStyle::default_bar()
             .template("[{elapsed_precise}] {bar:40.cyan/blue} {msg}")
@@ -582,6 +584,8 @@ fn drop_all(conn: &PgConnection) {
     conn.execute("DROP VIEW users_votes");
     bar.inc(1);
     conn.execute("DROP TABLE votes");
+    bar.inc(1);
+    conn.execute("DROP TABLE fences cascade");
     bar.inc(1);
     conn.execute("DROP TABLE choices");
     bar.inc(1);
@@ -825,12 +829,12 @@ fn populate_votes(
 
                 let c_id = choice_ids[choice_slice[(i + 1) * j]];
 
-                // placeholder - randomize later
                 let geo_pnt: GeogPoint = gen_rand_geo();
+                let geo_val = Point(vec![geo_pnt.x, geo_pnt.y]);
 
-                let fence_tit = "Nob Hill";
+                let fence_tit = get_fence_by_coords(&conn, geo_val).unwrap();
 
-                create_vote(&conn, c_id, name, 1, geo_pnt, fence_tit);
+                create_vote(&conn, c_id, name, 1, geo_pnt, &fence_tit);
                 bar.inc(1);
             });
         }
