@@ -212,14 +212,15 @@ mod schema;
 pub use pg_pool::DbConn;
 pub use pg_pool::Pool;
 
-mod db;
+pub mod db;
+
+use db::*;
 
 embed_migrations!("./migrations");
 
-use self::models::{
-    Category, Choice, NewCategory, NewChoice, NewQuestion, NewSurvey, NewUser, NewVote, Question,
-    Survey, User, Vote, Fence, NewFence
-};
+use self::models::choice::{ Choice, NewChoice };
+use self::models::vote::{ Vote, NewVote };
+use self::models::category::{ Category, NewCategory };
 
 /**
  * DEFINED ERRORS
@@ -389,12 +390,12 @@ fn populate_all(row_count: u32) -> Result<(), Box<dyn Error>> {
             .progress_chars("##-"),
     );
 
-    let usernames = db::users::populate_users(&pool, row_count, &bar)?;
+    let usernames = users::populate(&pool, row_count, &bar)?;
 
     let _ = populate_categories(&pool, "TestCategory", &bar)?;
 
-    let survey_ids = populate_surveys(&pool, &usernames, row_count, &bar)?;
-    let question_ids = populate_questions(&pool, &survey_ids, row_count, &bar)?;
+    let survey_ids = surveys::populate(&pool, &usernames, row_count, &bar)?;
+    let question_ids = questions::populate(&pool, &survey_ids, row_count, &bar)?;
     let choice_ids = populate_choices(&pool, &question_ids, row_count, &bar)?;
     populate_votes(&pool, &usernames, &choice_ids, &bar)?;
     bar.finish();
@@ -420,7 +421,7 @@ fn populate_icecream(row_count: u32) -> Result<(), Box<dyn Error>> {
             .progress_chars("##-"),
     );
 
-    let usernames = populate_users(&pool, row_count, &bar)?;
+    let usernames = users::populate(&pool, row_count, &bar)?;
 
     let _ = populate_categories(&pool, "food", &bar)?;
 
@@ -436,7 +437,7 @@ fn populate_icecream(row_count: u32) -> Result<(), Box<dyn Error>> {
 
         let cat = "food";
 
-        let survey = create_survey(&conn, &usernames[0], &survey_title, cat);
+        let survey = surveys::create(&conn, &usernames[0], &survey_title, cat);
 
         survey_id = survey.id;
     }
@@ -450,7 +451,7 @@ fn populate_icecream(row_count: u32) -> Result<(), Box<dyn Error>> {
         let q_title = "What is your favorite icecream?";
         let q_type = "multiple".to_string();
 
-        let question = create_question(&conn, survey_id, &q_type, &q_title);
+        let question = questions::create(&conn, survey_id, &q_type, &q_title);
 
         question_id = question.id;
     }
@@ -652,45 +653,6 @@ fn rebuild_test(base_url: &str) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-// Populates users table with row_count random users
-fn populate_users(
-    pool: &Pool,
-    row_count: u32,
-    bar: &ProgressBar,
-) -> Result<Vec<String>, Box<dyn Error>> {
-    bar.set_message(&format!("Seeding {} users", row_count));
-
-    let usernames: Vec<String> = (0..row_count)
-        .into_par_iter()
-        .map(|_| {
-            let pool = pool.clone();
-
-            let conn = pool.get().unwrap();
-
-            let user = format!(
-                "{}{}",
-                fake!(Internet.user_name),
-                fake!(Number.between(90, 9999))
-            );
-            let pw = format!(
-                "{}{}",
-                fake!(Name.name),
-                fake!(Number.between(10000, 99999))
-            );
-            let em = format!("{}@gmail.com", user);
-            let first = format!("{}", fake!(Name.first_name));
-            let last = format!("{}", fake!(Name.last_name));
-
-            create_user(&conn, &user, &pw, &em, &first, &last);
-            bar.inc(1);
-
-            user
-        })
-        .collect();
-
-    Ok(usernames)
-}
-
 // TODO: UPDATE THIS TO POPULATE RANDOM CHOICES
 fn populate_categories(
     pool: &Pool,
@@ -705,65 +667,6 @@ fn populate_categories(
     create_category(&conn, title);
 
     Ok(title.to_string())
-}
-
-// Populates surveys table with row_count random surveys making sure each survey is being created
-// by an existing user
-fn populate_surveys(
-    pool: &Pool,
-    authors: &Vec<String>,
-    row_count: u32,
-    bar: &ProgressBar,
-) -> Result<Vec<i32>, Box<dyn Error>> {
-    bar.set_message(&format!("Seeding {} surveys", row_count));
-
-    let survey_ids: Vec<i32> = authors
-        .par_iter()
-        .map(|auth| {
-            let pool = pool.clone();
-            let conn = pool.get().unwrap();
-
-            let survey_title = format!("{}", fake!(Lorem.sentence(4, 8)));
-
-            // TODO: Change this later to not be a static category field
-            let cat = "TestCategory";
-
-            let survey = create_survey(&conn, &auth, &survey_title, cat);
-            bar.inc(1);
-
-            survey.id
-        })
-        .collect();
-
-    Ok(survey_ids)
-}
-
-// Populates questions table with row_count random questions ensuring that each question relates to
-// an existing survey
-fn populate_questions(
-    pool: &Pool,
-    survey_ids: &Vec<i32>,
-    row_count: u32,
-    bar: &ProgressBar,
-) -> Result<Vec<i32>, Box<dyn Error>> {
-    bar.set_message(&format!("Seeding {} questions", row_count));
-
-    let question_ids: Vec<i32> = survey_ids
-        .par_iter()
-        .map(|s_id| {
-            let pool = pool.clone();
-            let conn = pool.get().unwrap();
-
-            let q_title = format!("{}", fake!(Lorem.sentence(3, 7)));
-            let q_type = "multiple".to_string();
-            let question = create_question(&conn, *s_id, &q_type, &q_title);
-            bar.inc(1);
-
-            question.id
-        })
-        .collect();
-
-    Ok(question_ids)
 }
 
 // Populates choices table with row_count * 4 random choices ensuring that each question relates to
@@ -947,72 +850,6 @@ fn generate_pool() -> Pool {
  * The following series of functions are very simple - each one simply creates a single
  * user/survey/question/choice/vote
  */
-fn create_user<'a>(
-    conn: &PgConnection,
-    user: &'a str,
-    pw: &'a str,
-    em: &'a str,
-    first: &'a str,
-    last: &'a str,
-) -> User {
-    use self::schema::users;
-
-    let new_user = NewUser {
-        username: user,
-        password: pw,
-        email: em,
-        first_name: first,
-        last_name: last,
-        is_admin: false,
-    };
-
-    diesel::insert_into(users::table)
-        .values(&new_user)
-        .get_result(conn)
-        .expect("Error saving new user")
-}
-
-fn create_survey<'a>(
-    conn: &PgConnection,
-    auth: &'a str,
-    survey_title: &'a str,
-    cat: &'a str,
-) -> Survey {
-    use self::schema::surveys;
-
-    let new_survey = NewSurvey {
-        author: auth,
-        title: survey_title,
-        published: true,
-        category: cat,
-    };
-
-    diesel::insert_into(surveys::table)
-        .values(&new_survey)
-        .get_result(conn)
-        .expect("Error saving new survey")
-}
-
-fn create_question<'a>(
-    conn: &PgConnection,
-    s_id: i32,
-    q_type: &'a str,
-    q_title: &'a str,
-) -> Question {
-    use self::schema::questions;
-
-    let new_question = NewQuestion {
-        survey_id: s_id,
-        question_type: q_type,
-        title: q_title,
-    };
-
-    diesel::insert_into(questions::table)
-        .values(&new_question)
-        .get_result(conn)
-        .expect("Error saving new question")
-}
-
 fn create_choice<'a>(conn: &PgConnection, q_id: i32, c_type: &'a str, c_title: &'a str) -> Choice {
     use self::schema::choices;
 

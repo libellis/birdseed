@@ -1,43 +1,17 @@
-#[macro_use]
-extern crate diesel;
-extern crate dotenv;
-
-#[macro_use]
-extern crate diesel_migrations;
-
-#[macro_use]
-extern crate fake;
-
-extern crate indicatif;
-extern crate rand;
-
-use std::fs::File;
-use std::io::prelude::*;
-
 use diesel::pg::PgConnection;
 use diesel::prelude::*;
-use dotenv::dotenv;
-use std::env;
-
-use std::process::Command;
 
 use std::error::Error;
-use std::io;
-use std::io::ErrorKind::InvalidInput;
-use structopt::StructOpt;
-
-use diesel_geography::types::GeogPoint;
 
 use rayon::prelude::*;
 
-use indicatif::{ProgressBar, ProgressStyle};
+use indicatif::ProgressBar;
 
 use crate::Pool;
-
 use crate::models::user::{User, NewUser};
 
 // Populates users table with row_count random users
-pub fn populate_users(
+pub fn populate(
     pool: &Pool,
     row_count: u32,
     bar: &ProgressBar,
@@ -65,7 +39,7 @@ pub fn populate_users(
             let first = format!("{}", fake!(Name.first_name));
             let last = format!("{}", fake!(Name.last_name));
 
-            create_user(&conn, &user, &pw, &em, &first, &last);
+            create(&conn, &user, &pw, &em, &first, &last);
             bar.inc(1);
 
             user
@@ -75,7 +49,7 @@ pub fn populate_users(
     Ok(usernames)
 }
 
-pub fn create_user<'a>(
+pub fn create<'a>(
     conn: &PgConnection,
     user: &'a str,
     pw: &'a str,
