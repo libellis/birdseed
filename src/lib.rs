@@ -339,28 +339,25 @@ fn load_fences(filepath: String) -> Result<(), Box<dyn Error>> {
     buf_reader.read_to_string(&mut contents)?;
 
     // load geo data into fences table
-    let conn = pool.get().unwrap();
-
-    load_geo_data(&conn, &contents)?;
+    load_geo_data(&pool, &contents)?;
 
     Ok(())
 }
 
-fn load_geo_data(conn: &PgConnection, geojson_str: &String) -> Result<(), Box<dyn Error>> {
-    use diesel::dsl::sql_query;
+fn load_geo_data(pool: &Pool, geojson_str: &String) -> Result<(), Box<dyn Error>> {
     
     match geojson_str.parse::<GeoJson>().unwrap() {
         GeoJson::FeatureCollection(feat_col) => (
             for feature in feat_col.features {
+                let pool = pool.clone();
+                let conn = pool.get().unwrap();
                 let property = feature.properties.unwrap();
                 let title = property.get("nhood").unwrap().to_string();
                 let trimmed_title = title.split('"').collect::<Vec<&str>>()[1];
                 let geo_level = 1;
                 let geojson = feature.geometry.unwrap();
 
-                let query_str = format!("INSERT INTO fences (title, geo_level, geo) VALUES ('{}', '{}', ST_GeomFromGeoJSON('{}'));", trimmed_title, geo_level, GeoJson::from(geojson).to_string());
-
-                sql_query(query_str).execute(conn)?;
+                create_fence(&conn, trimmed_title, geo_level, GeoJson::from(geojson))?;
             }
         ),
         _ => (),
@@ -1060,3 +1057,19 @@ fn create_category<'a>(conn: &PgConnection, title: &'a str) -> Category {
         .get_result(conn)
         .expect("Error saving new vote")
 }
+
+// doesn't return a fence yet due to complication with transforming geo back to json
+// we don't need it yet at this stage at least
+fn create_fence<'a>(conn: &PgConnection, tle: &'a str, geo_lvl: i32, geo_json: GeoJson) -> Result<(), Box<dyn Error>> {
+    use self::schema::fences::dsl::*;
+    use diesel::dsl::{sql, insert_into};
+
+    let geo_func_call = format!("ST_GeomFromGeoJSON('{}')", geo_json.to_string());
+    
+    insert_into(fences)
+        .values((title.eq(tle), geo_level.eq(geo_lvl), geo.eq(sql(&geo_func_call))))
+        .execute(conn)?;
+
+    Ok(())
+}
+
