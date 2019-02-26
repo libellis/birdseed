@@ -574,33 +574,30 @@ fn clear_all() -> Result<(), Box<dyn Error>> {
 // request if you have a better solution in mind.
 #[allow(unused_must_use)]
 fn drop_all(conn: &PgConnection) {
-    let bar = ProgressBar::new(10);
+    let drop_statements = vec![
+        "DROP VIEW users_votes",
+        "DROP TABLE votes",
+        "DROP TABLE fences cascade",
+        "DROP TABLE choices",
+        "DROP TABLE questions",
+        "DROP TABLE surveys",
+        "DROP TABLE categories",
+        "DROP TABLE users",
+        "DROP TABLE __diesel_schema_migrations",
+    ];
+
+    let bar = ProgressBar::new(drop_statements.len() as u64);
     bar.set_style(
         ProgressStyle::default_bar()
             .template("[{elapsed_precise}] {bar:40.cyan/blue} {msg}")
             .progress_chars("##-"),
     );
 
-    conn.execute("DROP TABLE fences cascade");
-    bar.inc(1);
-    conn.execute("DROP VIEW users_votes");
-    bar.inc(1);
-    conn.execute("DROP TABLE votes");
-    bar.inc(1);
-    conn.execute("DROP TABLE fences cascade");
-    bar.inc(1);
-    conn.execute("DROP TABLE choices");
-    bar.inc(1);
-    conn.execute("DROP TABLE questions");
-    bar.inc(1);
-    conn.execute("DROP TABLE surveys");
-    bar.inc(1);
-    conn.execute("DROP TABLE categories");
-    bar.inc(1);
-    conn.execute("DROP TABLE users");
-    bar.inc(1);
-    conn.execute("DROP TABLE __diesel_schema_migrations");
-    bar.inc(1);
+    drop_statements.iter().for_each(|statement| {
+        conn.execute(statement);
+        bar.inc(1);
+    });
+
     bar.finish();
 }
 
