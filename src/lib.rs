@@ -193,8 +193,6 @@ use std::io;
 use std::io::ErrorKind::InvalidInput;
 use structopt::StructOpt;
 
-use geojson::GeoJson;
-
 use indicatif::{ProgressBar, ProgressStyle};
 
 mod models;
@@ -300,6 +298,7 @@ fn setup() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+// Create PSQL database specified.
 fn setup_database(database: &str) {
     Command::new("createdb")
         .arg(database)
@@ -307,6 +306,7 @@ fn setup_database(database: &str) {
         .expect("failed to create database");
 }
 
+// Drop PSQL database specified.
 fn drop_database(database: &str) {
     Command::new("dropdb")
         .arg(database)
@@ -314,6 +314,7 @@ fn drop_database(database: &str) {
         .expect("failed to drop database");
 }
 
+// Load all the fences stored in a geojson file by supplying a filepath.
 fn load_fences(filepath: String) -> Result<(), Box<dyn Error>> {
     use std::io::BufReader;
 
@@ -330,33 +331,8 @@ fn load_fences(filepath: String) -> Result<(), Box<dyn Error>> {
     buf_reader.read_to_string(&mut contents)?;
 
     // load geo data into fences table
-    load_geo_data(&pool, &contents)?;
+    fences::load_geo_data(&pool, &contents)?;
 
-    Ok(())
-}
-
-fn load_geo_data(pool: &Pool, geojson_str: &String) -> Result<(), Box<dyn Error>> {
-    
-    match geojson_str.parse::<GeoJson>().unwrap() {
-        GeoJson::FeatureCollection(feat_col) => (
-            for feature in feat_col.features {
-                let pool = pool.clone();
-                let conn = pool.get().unwrap();
-                let property = feature.properties.unwrap();
-                let title = property.get("nhood").unwrap().to_string();
-
-                // for some reason serde Value types wrap their strings in double quotes - this
-                // removes the quotes - look into if there's a more natural way to handle this
-                let trimmed_title = title.split('"').collect::<Vec<&str>>()[1];
-                let geo_level = 1;
-                let geojson = feature.geometry.unwrap();
-
-                create_fence(&conn, trimmed_title, geo_level, GeoJson::from(geojson))?;
-            }
-        ),
-        _ => (),
-    }
-    
     Ok(())
 }
 
@@ -392,7 +368,10 @@ fn populate_all(row_count: u32) -> Result<(), Box<dyn Error>> {
 }
 
 // Kicks off populating all tables in main database and updating user
-// with visual progress bar along the way
+// with visual progress bar along the way. This was hacked together 
+// quickly at a hackathon
+//
+// TODO: Break out into smaller functions.
 fn populate_icecream(row_count: u32) -> Result<(), Box<dyn Error>> {
     // get the base url and append it with the db name
     dotenv().ok();
@@ -469,6 +448,7 @@ fn populate_icecream(row_count: u32) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+// Runs migrations based on the database passed in (main, test or all)
 fn migrate(database: &str) -> Result<(), Box<dyn Error>> {
     // get the base url and append it with the db name
     dotenv().ok();
@@ -493,6 +473,7 @@ fn migrate(database: &str) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+// Runs migrations on the main database.
 fn migrate_main(base_url: &String) -> Result<(), Box<dyn Error>> {
     env::set_var("DATABASE_URL", &format!("{}{}", base_url, "libellis"));
 
@@ -504,6 +485,7 @@ fn migrate_main(base_url: &String) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+// Runs migrations on the test database.
 fn migrate_test(base_url: &String) -> Result<(), Box<dyn Error>> {
     env::set_var("DATABASE_URL", &format!("{}{}", base_url, "libellis_test"));
 
@@ -617,6 +599,7 @@ fn rebuild(database: &str) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+// Drops all tables in the main database and rebuilds them by running embedded migrations
 fn rebuild_main(base_url: &str) -> Result<(), Box<dyn Error>> {
     std::env::set_var("DATABASE_URL", &format!("{}{}", base_url, "libellis"));
     println!("\r\n                🐦 Connecting to Main DB 🐦\r\n");
@@ -629,6 +612,7 @@ fn rebuild_main(base_url: &str) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+// Drops all tables in the test database and rebuilds them by running embedded migrations
 fn rebuild_test(base_url: &str) -> Result<(), Box<dyn Error>> {
     std::env::set_var("DATABASE_URL", &format!("{}{}", base_url, "libellis_test"));
     println!("\r\n                🐦 Connecting to Test DB 🐦\r\n");
@@ -643,6 +627,9 @@ fn rebuild_test(base_url: &str) -> Result<(), Box<dyn Error>> {
 
 // Establishes a connection to the libellis postgres database on your machine, as specified by your
 // DATABASE_URL environment variable. Returns a single PgConnection
+//
+// Likely don't need this farther down the road once all functions have been re-factored to use
+// a pool.
 fn establish_connection() -> PgConnection {
     dotenv().ok();
 
@@ -660,23 +647,3 @@ fn generate_pool() -> Pool {
 
     pg_pool::init(&database_url)
 }
-
-/**
- * The following series of functions are very simple - each one simply creates a single
- * user/survey/question/choice/vote
- */
-// doesn't return a fence yet due to complication with transforming geo back to json
-// we don't need it yet at this stage at least
-fn create_fence<'a>(conn: &PgConnection, tle: &'a str, geo_lvl: i32, geo_json: GeoJson) -> Result<(), Box<dyn Error>> {
-    use self::schema::fences::dsl::*;
-    use diesel::dsl::{sql, insert_into};
-
-    let geo_func_call = format!("ST_GeomFromGeoJSON('{}')", geo_json.to_string());
-    
-    insert_into(fences)
-        .values((title.eq(tle), geo_level.eq(geo_lvl), geo.eq(sql(&geo_func_call))))
-        .execute(conn)?;
-
-    Ok(())
-}
-

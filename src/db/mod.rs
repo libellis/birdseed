@@ -4,3 +4,4 @@ pub mod questions;
 pub mod choices;
 pub mod categories;
 pub mod votes;
+pub mod fences;
