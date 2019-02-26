@@ -339,28 +339,28 @@ fn load_fences(filepath: String) -> Result<(), Box<dyn Error>> {
     buf_reader.read_to_string(&mut contents)?;
 
     // load geo data into fences table
-    let conn = pool.get().unwrap();
-
-    load_geo_data(&conn, &contents)?;
+    load_geo_data(&pool, &contents)?;
 
     Ok(())
 }
 
-fn load_geo_data(conn: &PgConnection, geojson_str: &String) -> Result<(), Box<dyn Error>> {
-    use diesel::dsl::sql_query;
+fn load_geo_data(pool: &Pool, geojson_str: &String) -> Result<(), Box<dyn Error>> {
     
     match geojson_str.parse::<GeoJson>().unwrap() {
         GeoJson::FeatureCollection(feat_col) => (
             for feature in feat_col.features {
+                let pool = pool.clone();
+                let conn = pool.get().unwrap();
                 let property = feature.properties.unwrap();
                 let title = property.get("nhood").unwrap().to_string();
+
+                // for some reason serde Value types wrap their strings in double quotes - this
+                // removes the quotes - look into if there's a more natural way to handle this
                 let trimmed_title = title.split('"').collect::<Vec<&str>>()[1];
                 let geo_level = 1;
                 let geojson = feature.geometry.unwrap();
 
-                let query_str = format!("INSERT INTO fences (title, geo_level, geo) VALUES ('{}', '{}', ST_GeomFromGeoJSON('{}'));", trimmed_title, geo_level, GeoJson::from(geojson).to_string());
-
-                sql_query(query_str).execute(conn)?;
+                create_fence(&conn, trimmed_title, geo_level, GeoJson::from(geojson))?;
             }
         ),
         _ => (),
@@ -425,6 +425,7 @@ fn populate_icecream(row_count: u32) -> Result<(), Box<dyn Error>> {
     let survey_id;
 
     // scoped so the pool connection gets dropped automatically
+    // inject the icecream survey
     {
         let pool = pool.clone();
         let conn = pool.get().unwrap();
@@ -439,7 +440,7 @@ fn populate_icecream(row_count: u32) -> Result<(), Box<dyn Error>> {
     }
 
     let question_id;
-    // question injection
+    // inject the one question for the icecream survey
     {
         let pool = pool.clone();
         let conn = pool.get().unwrap();
@@ -455,7 +456,7 @@ fn populate_icecream(row_count: u32) -> Result<(), Box<dyn Error>> {
     let choices = vec!["Strawberry", "Vanilla", "Chocolate"];
     let choice_ids;
 
-    // choice injection
+    // inject our icecream flavors for fake users to fake vote on
     {
         let pool = pool.clone();
         let conn = pool.get().unwrap();
@@ -470,6 +471,7 @@ fn populate_icecream(row_count: u32) -> Result<(), Box<dyn Error>> {
             .collect();
     }
 
+    // populate fake votes with our newly created fake users
     populate_icecream_votes(&pool, &usernames, &choice_ids, &bar)?;
     bar.finish();
     println!("\r\n             🐦 Birdseed has Finished Seeding! 🐦\r\n",);
@@ -572,33 +574,31 @@ fn clear_all() -> Result<(), Box<dyn Error>> {
 // request if you have a better solution in mind.
 #[allow(unused_must_use)]
 fn drop_all(conn: &PgConnection) {
-    let bar = ProgressBar::new(10);
+    let drop_statements = vec![
+        "DROP VIEW users_votes",
+        "DROP TABLE votes",
+        "DROP TABLE fences cascade",
+        "DROP EXTENSION postgis",
+        "DROP TABLE choices",
+        "DROP TABLE questions",
+        "DROP TABLE surveys",
+        "DROP TABLE categories",
+        "DROP TABLE users",
+        "DROP TABLE __diesel_schema_migrations",
+    ];
+
+    let bar = ProgressBar::new(drop_statements.len() as u64);
     bar.set_style(
         ProgressStyle::default_bar()
             .template("[{elapsed_precise}] {bar:40.cyan/blue} {msg}")
             .progress_chars("##-"),
     );
 
-    conn.execute("DROP TABLE fences cascade");
-    bar.inc(1);
-    conn.execute("DROP VIEW users_votes");
-    bar.inc(1);
-    conn.execute("DROP TABLE votes");
-    bar.inc(1);
-    conn.execute("DROP TABLE fences cascade");
-    bar.inc(1);
-    conn.execute("DROP TABLE choices");
-    bar.inc(1);
-    conn.execute("DROP TABLE questions");
-    bar.inc(1);
-    conn.execute("DROP TABLE surveys");
-    bar.inc(1);
-    conn.execute("DROP TABLE categories");
-    bar.inc(1);
-    conn.execute("DROP TABLE users");
-    bar.inc(1);
-    conn.execute("DROP TABLE __diesel_schema_migrations");
-    bar.inc(1);
+    drop_statements.iter().for_each(|statement| {
+        conn.execute(statement);
+        bar.inc(1);
+    });
+
     bar.finish();
 }
 
@@ -1060,3 +1060,19 @@ fn create_category<'a>(conn: &PgConnection, title: &'a str) -> Category {
         .get_result(conn)
         .expect("Error saving new vote")
 }
+
+// doesn't return a fence yet due to complication with transforming geo back to json
+// we don't need it yet at this stage at least
+fn create_fence<'a>(conn: &PgConnection, tle: &'a str, geo_lvl: i32, geo_json: GeoJson) -> Result<(), Box<dyn Error>> {
+    use self::schema::fences::dsl::*;
+    use diesel::dsl::{sql, insert_into};
+
+    let geo_func_call = format!("ST_GeomFromGeoJSON('{}')", geo_json.to_string());
+    
+    insert_into(fences)
+        .values((title.eq(tle), geo_level.eq(geo_lvl), geo.eq(sql(&geo_func_call))))
+        .execute(conn)?;
+
+    Ok(())
+}
+
