@@ -9,11 +9,10 @@ use indicatif::ProgressBar;
 
 use crate::pg_pool::Pool;
 
-use crate::models::survey::{ Survey, NewSurvey };
+use crate::models::survey::{NewSurvey, Survey};
 
-
-// Populates surveys table with row_count random surveys making sure each survey is being created
-// by an existing user
+/// Populates surveys table with row_count random surveys making sure each survey is being created
+/// by an existing user.
 pub fn populate(
     pool: &Pool,
     authors: &Vec<String>,
@@ -43,6 +42,7 @@ pub fn populate(
     Ok(survey_ids)
 }
 
+/// Creates a single survey in the database for the given author (user).
 pub fn create<'a>(
     conn: &PgConnection,
     auth: &'a str,

@@ -7,11 +7,12 @@ use geojson::GeoJson;
 
 use crate::pg_pool::Pool;
 
+/// takes a geoJSON string and loads it into the database in a structured way - in the process
+/// converting from geoJSON to geom psql type
 pub fn load_geo_data(pool: &Pool, geojson_str: &String) -> Result<(), Box<dyn Error>> {
-    
     match geojson_str.parse::<GeoJson>().unwrap() {
-        GeoJson::FeatureCollection(feat_col) => (
-            for feature in feat_col.features {
+        GeoJson::FeatureCollection(feat_col) => {
+            (for feature in feat_col.features {
                 let pool = pool.clone();
                 let conn = pool.get().unwrap();
                 let property = feature.properties.unwrap();
@@ -24,26 +25,36 @@ pub fn load_geo_data(pool: &Pool, geojson_str: &String) -> Result<(), Box<dyn Er
                 let geojson = feature.geometry.unwrap();
 
                 create(&conn, trimmed_title, geo_level, GeoJson::from(geojson))?;
-            }
-        ),
+            })
+        }
         _ => (),
     }
-    
+
     Ok(())
 }
 
+/// Creates a single fence in the database, and in the process calls the ST_GeomFromGeoJSON postgis
+/// function to turn the supplied geoJSON into a geom type for data storage.
 // doesn't return a fence yet due to complication with transforming geo back to json
 // we don't need it yet at this stage at least
-pub fn create<'a>(conn: &PgConnection, tle: &'a str, geo_lvl: i32, geo_json: GeoJson) -> Result<(), Box<dyn Error>> {
+pub fn create<'a>(
+    conn: &PgConnection,
+    tle: &'a str,
+    geo_lvl: i32,
+    geo_json: GeoJson,
+) -> Result<(), Box<dyn Error>> {
     use crate::schema::fences::dsl::*;
-    use diesel::dsl::{sql, insert_into};
+    use diesel::dsl::{insert_into, sql};
 
     let geo_func_call = format!("ST_GeomFromGeoJSON('{}')", geo_json.to_string());
-    
+
     insert_into(fences)
-        .values((title.eq(tle), geo_level.eq(geo_lvl), geo.eq(sql(&geo_func_call))))
+        .values((
+            title.eq(tle),
+            geo_level.eq(geo_lvl),
+            geo.eq(sql(&geo_func_call)),
+        ))
         .execute(conn)?;
 
     Ok(())
 }
-

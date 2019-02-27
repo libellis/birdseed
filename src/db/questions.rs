@@ -9,10 +9,10 @@ use indicatif::ProgressBar;
 
 use crate::pg_pool::Pool;
 
-use crate::models::question::{ Question, NewQuestion };
+use crate::models::question::{NewQuestion, Question};
 
-// Populates questions table with row_count random questions ensuring that each question relates to
-// an existing survey
+/// Populates questions table with row_count random questions ensuring that each question relates to
+/// an existing survey.
 pub fn populate(
     pool: &Pool,
     survey_ids: &Vec<i32>,
@@ -39,12 +39,8 @@ pub fn populate(
     Ok(question_ids)
 }
 
-pub fn create<'a>(
-    conn: &PgConnection,
-    s_id: i32,
-    q_type: &'a str,
-    q_title: &'a str,
-) -> Question {
+/// Creates a single question for the given survey id in the database
+pub fn create<'a>(conn: &PgConnection, s_id: i32, q_type: &'a str, q_title: &'a str) -> Question {
     use crate::schema::questions;
 
     let new_question = NewQuestion {

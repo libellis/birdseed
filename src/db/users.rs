@@ -7,10 +7,10 @@ use rayon::prelude::*;
 
 use indicatif::ProgressBar;
 
+use crate::models::user::{NewUser, User};
 use crate::Pool;
-use crate::models::user::{User, NewUser};
 
-// Populates users table with row_count random users
+/// Populates users table with row_count random users.
 pub fn populate(
     pool: &Pool,
     row_count: u32,
@@ -49,6 +49,8 @@ pub fn populate(
     Ok(usernames)
 }
 
+/// Creates a single user in the database WITHOUT hashing the password (for quickly seeding junk
+/// users).
 pub fn create<'a>(
     conn: &PgConnection,
     user: &'a str,

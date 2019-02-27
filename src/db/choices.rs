@@ -9,9 +9,9 @@ use indicatif::ProgressBar;
 
 use crate::pg_pool::Pool;
 
-use crate::models::choice::{ Choice, NewChoice };
+use crate::models::choice::{Choice, NewChoice};
 
-
+/// Populates the database with fake choices
 pub fn populate(
     pool: &Pool,
     question_ids: &Vec<i32>,
@@ -44,6 +44,7 @@ pub fn populate(
     Ok(choice_ids)
 }
 
+/// Creates a single choice (for a given question) in the database.
 pub fn create<'a>(conn: &PgConnection, q_id: i32, c_type: &'a str, c_title: &'a str) -> Choice {
     use crate::schema::choices;
 

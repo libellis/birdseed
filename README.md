@@ -42,7 +42,7 @@ $ cargo build --release
 
 ### Features
 
-### `setup`
+#### `setup`
 
 You can setup the main libellis and libellis_test databases with this
 subcommand.  It will attempt to drop both libellis and libellis_test before
@@ -74,7 +74,7 @@ You can also use `-d` for shorthand:
 ```terminal
 $ birdseed rebuild -d test
 ```
-### `fences`
+#### `fences`
 
 You can load in fence data from a geojson file with the fences subcommand:
 
@@ -112,7 +112,7 @@ In this exampe we override the default of 1,000 rows and instead seed 10,000 row
 Note: What the row count really means is that we will seed row count amount of users, surveys
 and questions, but row count * 4 amount of choices and votes.
 
-### `migrate`
+#### `migrate`
 
 To run migrations, use the migrate subcommand (this will update your database schema to the
 most recent schema).
@@ -141,7 +141,7 @@ You can clear all tables with the `clear` subcommand:
 $ birdseed clear
 ```
 
-### Icecream
+#### `icecream`
 
 For fun and profit you can seed the database with an row count amount of users, a single poll
 about icecream, and then populate that poll with fake votes from your newly faked user pool,

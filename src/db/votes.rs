@@ -3,13 +3,13 @@ use diesel::prelude::*;
 
 use std::error::Error;
 
-use geojson::{ GeoJson, Geometry };
-use geojson::Value::{ self, Point };
+use geojson::Value::{self, Point};
+use geojson::{GeoJson, Geometry};
 
 use diesel_geography::types::GeogPoint;
 
 use rand::seq::SliceRandom;
-use rand::{ thread_rng, Rng};
+use rand::{thread_rng, Rng};
 
 use rayon::prelude::*;
 
@@ -17,10 +17,10 @@ use indicatif::ProgressBar;
 
 use crate::pg_pool::Pool;
 
-use crate::models::vote::{ Vote, NewVote };
+use crate::models::vote::{NewVote, Vote};
 
-// Populates the votes table with real votes from our newly inserted random users who vote on
-// choices in a semi-randomish way (not that random really)
+/// Populates the votes table with real votes from our newly inserted random users who vote on
+/// choices in a semi-randomish way (not that random really)
 pub fn populate(
     pool: &Pool,
     authors: &Vec<String>,
@@ -65,12 +65,15 @@ pub fn populate(
 }
 
 #[derive(Copy, Clone, Debug)]
-pub struct GeoBox {
-    pub x_range: (f64, f64),
-    pub y_range: (f64, f64),
+struct GeoBox {
+    x_range: (f64, f64),
+    y_range: (f64, f64),
 }
 
-
+/// Generates a random GeogPoint from two simple GeoBoxes bounding the city
+/// of San Francisco
+// Expand later to be more generic (taking in a single GeoBox and returning a random point within
+// the bounds)
 pub fn gen_rand_geo() -> GeogPoint {
     let mut rng = rand::thread_rng();
     let box1 = GeoBox {
@@ -99,6 +102,8 @@ pub fn gen_rand_geo() -> GeogPoint {
     }
 }
 
+/// Populates randomized icecream votes with a list of users, and choice ids for the icecream
+/// choices for them to randomly pick between when "voting"
 pub fn populate_icecream(
     pool: &Pool,
     authors: &Vec<String>,
@@ -128,23 +133,24 @@ pub fn populate_icecream(
     Ok(())
 }
 
+/// Returns the title of a fence (usually a neighboord) that the given coordinates falls into.
 pub fn get_fence_by_coords(conn: &PgConnection, coords: Value) -> Result<String, Box<dyn Error>> {
-    use diesel::dsl::sql;
     use crate::schema::fences::dsl::*;
+    use diesel::dsl::sql;
 
     let geo_json = GeoJson::from(Geometry::new(coords));
 
-    let where_str = format!("ST_Intersects(ST_GeomFromGeoJSON('{}'), geo)", geo_json.to_string());
-    
+    let where_str = format!(
+        "ST_Intersects(ST_GeomFromGeoJSON('{}'), geo)",
+        geo_json.to_string()
+    );
+
     let fence: String = fences.select(title).filter(sql(&where_str)).first(conn)?;
-    
+
     Ok(fence)
 }
 
-/**
- * The following series of functions are very simple - each one simply creates a single
- * user/survey/question/choice/vote
- */
+/// Casts a single vote in the database for the user (name) supplied
 pub fn create<'a>(
     conn: &PgConnection,
     c_id: i32,

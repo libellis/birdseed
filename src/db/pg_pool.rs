@@ -6,6 +6,9 @@ use diesel::r2d2::ConnectionManager;
 use std::env;
 
 type ManagedPgConn = ConnectionManager<PgConnection>;
+
+/// Pool type is a simple wrapper over r2d2::Pool<ManagedPgConn> -> use it to pass around your
+/// pool.
 pub type Pool = r2d2::Pool<ManagedPgConn>;
 
 fn init(database_url: &str) -> Pool {
@@ -13,8 +16,8 @@ fn init(database_url: &str) -> Pool {
     r2d2::Pool::new(manager).expect("Failed to create pool.")
 }
 
-// Establishes a connection to the libellis postgres database on your machine, as specified by your
-// DATABASE_URL environment variable. Returns a Pool
+/// Establishes a connection to the libellis postgres database on your machine, as specified by your
+/// DATABASE_URL environment variable. Returns a Pool.
 pub fn generate_pool() -> Pool {
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
 

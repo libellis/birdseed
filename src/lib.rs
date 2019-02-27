@@ -145,7 +145,7 @@
 //! $ birdseed clear
 //! ```
 //!
-//! ### Icecream
+//! ### `icecream`
 //!
 //! For fun and profit you can seed the database with an row count amount of users, a single poll
 //! about icecream, and then populate that poll with fake votes from your newly faked user pool,
@@ -162,7 +162,6 @@
 //! ```terminal
 //! $ birdseed icecream -r 10000
 //! ```
-
 extern crate structopt;
 
 #[macro_use]
@@ -195,7 +194,11 @@ use structopt::StructOpt;
 
 use indicatif::{ProgressBar, ProgressStyle};
 
+/// This module provides crud for all our models, as well as populating fake data into each
+/// table. It also contains the module for creating our pg pool.
 pub mod db;
+
+/// This module provides all of our insertable and queryable diesel models.
 pub mod models;
 mod schema;
 
@@ -203,10 +206,6 @@ use db::*;
 use pg_pool::Pool;
 
 embed_migrations!("./migrations");
-
-/**
- * DEFINED ERRORS
- */
 
 #[derive(StructOpt, Debug)]
 #[structopt(
