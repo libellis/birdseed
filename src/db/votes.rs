@@ -15,9 +15,9 @@ use rayon::prelude::*;
 
 use indicatif::ProgressBar;
 
-use crate::pg_pool::Pool;
-
 use crate::models::vote::{NewVote, Vote};
+use crate::pg_pool::Pool;
+use crate::sql_functions::*;
 
 /// Populates the votes table with real votes from our newly inserted random users who vote on
 /// choices in a semi-randomish way (not that random really)
@@ -119,7 +119,6 @@ pub fn populate_icecream(
 
         let c_id = choice_ids[rng.gen_range(0, 3) as usize];
 
-        // placeholder - randomize later
         let geo_pnt: GeogPoint = gen_rand_geo();
 
         let geo_val = Point(vec![geo_pnt.x, geo_pnt.y]);
@@ -136,16 +135,13 @@ pub fn populate_icecream(
 /// Returns the title of a fence (usually a neighboord) that the given coordinates falls into.
 pub fn get_fence_by_coords(conn: &PgConnection, coords: Value) -> Result<String, Box<dyn Error>> {
     use crate::schema::fences::dsl::*;
-    use diesel::dsl::sql;
 
-    let geo_json = GeoJson::from(Geometry::new(coords));
+    let geo_json = GeoJson::from(Geometry::new(coords)).to_string();
 
-    let where_str = format!(
-        "ST_Intersects(ST_GeomFromGeoJSON('{}'), geo)",
-        geo_json.to_string()
-    );
-
-    let fence: String = fences.select(title).filter(sql(&where_str)).first(conn)?;
+    let fence: String = fences
+        .select(title)
+        .filter(ST_Intersects(ST_GeomFromGeoJSON(geo_json), geo))
+        .first(conn)?;
 
     Ok(fence)
 }

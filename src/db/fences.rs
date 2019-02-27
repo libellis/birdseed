@@ -6,6 +6,7 @@ use std::error::Error;
 use geojson::GeoJson;
 
 use crate::pg_pool::Pool;
+use crate::sql_functions::*;
 
 /// takes a geoJSON string and loads it into the database in a structured way - in the process
 /// converting from geoJSON to geom psql type
@@ -44,15 +45,13 @@ pub fn create<'a>(
     geo_json: GeoJson,
 ) -> Result<(), Box<dyn Error>> {
     use crate::schema::fences::dsl::*;
-    use diesel::dsl::{insert_into, sql};
-
-    let geo_func_call = format!("ST_GeomFromGeoJSON('{}')", geo_json.to_string());
+    use diesel::dsl::insert_into;
 
     insert_into(fences)
         .values((
             title.eq(tle),
             geo_level.eq(geo_lvl),
-            geo.eq(sql(&geo_func_call)),
+            geo.eq(ST_GeomFromGeoJSON(geo_json.to_string())),
         ))
         .execute(conn)?;
 

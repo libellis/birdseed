@@ -200,7 +200,10 @@ pub mod db;
 
 /// This module provides all of our insertable and queryable diesel models.
 pub mod models;
+
 mod schema;
+/// Provides extra SQL functions not provided by default in diesel.
+pub mod sql_functions;
 
 use db::*;
 use pg_pool::Pool;
