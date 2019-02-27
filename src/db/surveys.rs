@@ -63,3 +63,10 @@ pub fn create<'a>(
         .get_result(conn)
         .expect("Error saving new survey")
 }
+
+/// Gets a single survey from the database by the given survey id.
+pub fn get(conn: &PgConnection, survey_id: i32) -> Result<Survey, diesel::result::Error> {
+    use crate::schema::surveys::dsl::*;
+
+    surveys.find(survey_id).first(conn)
+}
