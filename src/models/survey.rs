@@ -1,7 +1,7 @@
 use crate::schema::*;
 use std::time::SystemTime;
 
-#[derive(Queryable)]
+#[derive(Serialize, Deserialize, Queryable)]
 pub struct Survey {
     pub id: i32,
     pub author: String,
