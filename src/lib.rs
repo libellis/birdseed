@@ -195,16 +195,12 @@ use structopt::StructOpt;
 
 use indicatif::{ProgressBar, ProgressStyle};
 
-mod models;
-mod pg_pool;
+pub mod db;
+pub mod models;
 mod schema;
 
-pub use pg_pool::DbConn;
-pub use pg_pool::Pool;
-
-pub mod db;
-
 use db::*;
+use pg_pool::Pool;
 
 embed_migrations!("./migrations");
 
@@ -239,7 +235,7 @@ pub enum Birdseed {
     #[structopt(name = "fences")]
     /// Loads in fences from a geojson file
     Fences {
-        /// The file name to read from - default if not supplied is 
+        /// The file name to read from - default if not supplied is
         #[structopt(short = "f", long = "file", default_value = "data/fences.json")]
         filepath: String,
     },
@@ -322,8 +318,8 @@ fn load_fences(filepath: String) -> Result<(), Box<dyn Error>> {
     let base_url = env::var("PSQL_URL")?;
     env::set_var("DATABASE_URL", &format!("{}{}", base_url, "libellis"));
 
-    let pool = generate_pool();
-    
+    let pool = pg_pool::generate_pool();
+
     // read json file into a string
     let file = File::open(filepath)?;
     let mut buf_reader = BufReader::new(file);
@@ -344,7 +340,7 @@ fn populate_all(row_count: u32) -> Result<(), Box<dyn Error>> {
     let base_url = env::var("PSQL_URL")?;
     env::set_var("DATABASE_URL", &format!("{}{}", base_url, "libellis"));
 
-    let pool = generate_pool();
+    let pool = pg_pool::generate_pool();
     println!("\r\n                  🐦 Seeding All Tables 🐦\r\n",);
 
     let bar = ProgressBar::new((row_count * 11) as u64);
@@ -368,7 +364,7 @@ fn populate_all(row_count: u32) -> Result<(), Box<dyn Error>> {
 }
 
 // Kicks off populating all tables in main database and updating user
-// with visual progress bar along the way. This was hacked together 
+// with visual progress bar along the way. This was hacked together
 // quickly at a hackathon
 //
 // TODO: Break out into smaller functions.
@@ -378,7 +374,7 @@ fn populate_icecream(row_count: u32) -> Result<(), Box<dyn Error>> {
     let base_url = env::var("PSQL_URL")?;
     env::set_var("DATABASE_URL", &format!("{}{}", base_url, "libellis"));
 
-    let pool = generate_pool();
+    let pool = pg_pool::generate_pool();
     println!("\r\n                  🐦 Seeding All Tables 🐦\r\n",);
 
     let bar = ProgressBar::new((row_count * 9) as u64);
@@ -636,14 +632,4 @@ fn establish_connection() -> PgConnection {
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
 
     PgConnection::establish(&database_url).expect(&format!("Error connecting to {}", database_url))
-}
-
-// Establishes a connection to the libellis postgres database on your machine, as specified by your
-// DATABASE_URL environment variable. Returns a Pool
-fn generate_pool() -> Pool {
-    dotenv().ok();
-
-    let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-
-    pg_pool::init(&database_url)
 }

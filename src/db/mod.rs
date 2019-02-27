@@ -1,7 +1,8 @@
-pub mod users;
-pub mod surveys;
-pub mod questions;
-pub mod choices;
 pub mod categories;
-pub mod votes;
+pub mod choices;
 pub mod fences;
+pub mod pg_pool;
+pub mod questions;
+pub mod surveys;
+pub mod users;
+pub mod votes;
