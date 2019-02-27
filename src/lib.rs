@@ -68,6 +68,24 @@
 //! like to specify to only rebuild one database, pass in 'main' or 'test' to the -database
 //! argument flag:
 //!
+//! ### `fences`
+//!
+//! You can load in fence data from a geojson file with the fences subcommand:
+//!
+//! ```terminal
+//! $ birdseed fences
+//! ```
+//!
+//! By default it looks for a file called `fences.json` in the data folder from the root of this
+//! crate. This folder only exists if you cloned the repo.  To specify a filepath yourself pass the
+//! -f or -file flag after the fences subcommand:
+//!
+//! ```terminal
+//! $ birdseed fences -f BerkeleyNeighborhoods.json
+//! ```
+//!
+//! Note: This only works if you have a fences table - which would have been setup for you from the
+//! most recent migrations when running `birdseed setup` or `birdseed migrate`.
 //!
 //! ### `feed`
 //!
@@ -126,8 +144,24 @@
 //! ```terminal
 //! $ birdseed clear
 //! ```
-
-#[macro_use]
+//!
+//! ### `icecream`
+//!
+//! For fun and profit you can seed the database with an row count amount of users, a single poll
+//! about icecream, and then populate that poll with fake votes from your newly faked user pool,
+//! and have all of their votes counted from legitimate randomized locations within the city of San
+//! Francisco.
+//!
+//! ```terminal
+//! $ birdseed icecream
+//! ```
+//!
+//! By default the row count is 1000, and can be overriden in the same way as when using the `feed`
+//! subcommand:
+//!
+//! ```terminal
+//! $ birdseed icecream -r 10000
+//! ```
 extern crate structopt;
 
 #[macro_use]
@@ -143,6 +177,9 @@ extern crate fake;
 extern crate indicatif;
 extern crate rand;
 
+use std::fs::File;
+use std::io::prelude::*;
+
 use diesel::pg::PgConnection;
 use diesel::prelude::*;
 use dotenv::dotenv;
@@ -155,32 +192,20 @@ use std::io;
 use std::io::ErrorKind::InvalidInput;
 use structopt::StructOpt;
 
-use diesel_geography::types::GeogPoint;
-
-use rand::seq::SliceRandom;
-use rand::thread_rng;
-
-use rayon::prelude::*;
-
 use indicatif::{ProgressBar, ProgressStyle};
 
-mod models;
-mod pg_pool;
+/// This module provides crud for all our models, as well as populating fake data into each
+/// table. It also contains the module for creating our pg pool.
+pub mod db;
+
+/// This module provides all of our insertable and queryable diesel models.
+pub mod models;
 mod schema;
 
-pub use pg_pool::DbConn;
-pub use pg_pool::Pool;
+use db::*;
+use pg_pool::Pool;
 
 embed_migrations!("./migrations");
-
-use self::models::{
-    Category, Choice, NewCategory, NewChoice, NewQuestion, NewSurvey, NewUser, NewVote, Question,
-    Survey, User, Vote,
-};
-
-/**
- * DEFINED ERRORS
- */
 
 #[derive(StructOpt, Debug)]
 #[structopt(
@@ -204,6 +229,14 @@ pub enum Birdseed {
         /// How many rows to inject
         #[structopt(short = "r", long = "rows", default_value = "1000")]
         row_count: u32,
+    },
+
+    #[structopt(name = "fences")]
+    /// Loads in fences from a geojson file
+    Fences {
+        /// The file name to read from - default if not supplied is
+        #[structopt(short = "f", long = "file", default_value = "data/fences.json")]
+        filepath: String,
     },
 
     #[structopt(name = "setup")]
@@ -239,6 +272,7 @@ pub fn run(config: Birdseed) -> Result<(), Box<dyn Error>> {
         Birdseed::Rebuild { db } => rebuild(&db),
         Birdseed::Setup => setup(),
         Birdseed::Icecream { row_count } => populate_icecream(row_count),
+        Birdseed::Fences { filepath } => load_fences(filepath),
         Birdseed::Migrate { db } => migrate(&db),
         Birdseed::Clear => clear_all(),
     }
@@ -259,6 +293,7 @@ fn setup() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+// Create PSQL database specified.
 fn setup_database(database: &str) {
     Command::new("createdb")
         .arg(database)
@@ -266,11 +301,34 @@ fn setup_database(database: &str) {
         .expect("failed to create database");
 }
 
+// Drop PSQL database specified.
 fn drop_database(database: &str) {
     Command::new("dropdb")
         .arg(database)
         .output()
         .expect("failed to drop database");
+}
+
+// Load all the fences stored in a geojson file by supplying a filepath.
+fn load_fences(filepath: String) -> Result<(), Box<dyn Error>> {
+    use std::io::BufReader;
+
+    dotenv().ok();
+    let base_url = env::var("PSQL_URL")?;
+    env::set_var("DATABASE_URL", &format!("{}{}", base_url, "libellis"));
+
+    let pool = pg_pool::generate_pool();
+
+    // read json file into a string
+    let file = File::open(filepath)?;
+    let mut buf_reader = BufReader::new(file);
+    let mut contents = String::new();
+    buf_reader.read_to_string(&mut contents)?;
+
+    // load geo data into fences table
+    fences::load_geo_data(&pool, &contents)?;
+
+    Ok(())
 }
 
 // Kicks off populating all tables in main database and updating user
@@ -281,7 +339,7 @@ fn populate_all(row_count: u32) -> Result<(), Box<dyn Error>> {
     let base_url = env::var("PSQL_URL")?;
     env::set_var("DATABASE_URL", &format!("{}{}", base_url, "libellis"));
 
-    let pool = generate_pool();
+    let pool = pg_pool::generate_pool();
     println!("\r\n                  🐦 Seeding All Tables 🐦\r\n",);
 
     let bar = ProgressBar::new((row_count * 11) as u64);
@@ -291,28 +349,31 @@ fn populate_all(row_count: u32) -> Result<(), Box<dyn Error>> {
             .progress_chars("##-"),
     );
 
-    let usernames = populate_users(&pool, row_count, &bar)?;
+    let usernames = users::populate(&pool, row_count, &bar)?;
 
-    let _ = populate_categories(&pool, "TestCategory", &bar)?;
+    let _ = categories::populate(&pool, "TestCategory", &bar)?;
 
-    let survey_ids = populate_surveys(&pool, &usernames, row_count, &bar)?;
-    let question_ids = populate_questions(&pool, &survey_ids, row_count, &bar)?;
-    let choice_ids = populate_choices(&pool, &question_ids, row_count, &bar)?;
-    populate_votes(&pool, &usernames, &choice_ids, &bar)?;
+    let survey_ids = surveys::populate(&pool, &usernames, row_count, &bar)?;
+    let question_ids = questions::populate(&pool, &survey_ids, row_count, &bar)?;
+    let choice_ids = choices::populate(&pool, &question_ids, row_count, &bar)?;
+    votes::populate(&pool, &usernames, &choice_ids, &bar)?;
     bar.finish();
     println!("\r\n             🐦 Birdseed has Finished Seeding! 🐦\r\n",);
     Ok(())
 }
 
 // Kicks off populating all tables in main database and updating user
-// with visual progress bar along the way
+// with visual progress bar along the way. This was hacked together
+// quickly at a hackathon
+//
+// TODO: Break out into smaller functions.
 fn populate_icecream(row_count: u32) -> Result<(), Box<dyn Error>> {
     // get the base url and append it with the db name
     dotenv().ok();
     let base_url = env::var("PSQL_URL")?;
     env::set_var("DATABASE_URL", &format!("{}{}", base_url, "libellis"));
 
-    let pool = generate_pool();
+    let pool = pg_pool::generate_pool();
     println!("\r\n                  🐦 Seeding All Tables 🐦\r\n",);
 
     let bar = ProgressBar::new((row_count * 9) as u64);
@@ -322,13 +383,14 @@ fn populate_icecream(row_count: u32) -> Result<(), Box<dyn Error>> {
             .progress_chars("##-"),
     );
 
-    let usernames = populate_users(&pool, row_count, &bar)?;
+    let usernames = users::populate(&pool, row_count, &bar)?;
 
-    let _ = populate_categories(&pool, "food", &bar)?;
+    let _ = categories::populate(&pool, "food", &bar)?;
 
-    let mut survey_id = 0;
+    let survey_id;
 
     // scoped so the pool connection gets dropped automatically
+    // inject the icecream survey
     {
         let pool = pool.clone();
         let conn = pool.get().unwrap();
@@ -337,13 +399,13 @@ fn populate_icecream(row_count: u32) -> Result<(), Box<dyn Error>> {
 
         let cat = "food";
 
-        let survey = create_survey(&conn, &usernames[0], &survey_title, cat);
+        let survey = surveys::create(&conn, &usernames[0], &survey_title, cat);
 
         survey_id = survey.id;
     }
 
-    let mut question_id = 0;
-    // question injection
+    let question_id;
+    // inject the one question for the icecream survey
     {
         let pool = pool.clone();
         let conn = pool.get().unwrap();
@@ -351,15 +413,15 @@ fn populate_icecream(row_count: u32) -> Result<(), Box<dyn Error>> {
         let q_title = "What is your favorite icecream?";
         let q_type = "multiple".to_string();
 
-        let question = create_question(&conn, survey_id, &q_type, &q_title);
+        let question = questions::create(&conn, survey_id, &q_type, &q_title);
 
         question_id = question.id;
     }
 
     let choices = vec!["Strawberry", "Vanilla", "Chocolate"];
-    let mut choice_ids: Vec<i32> = Vec::new();
+    let choice_ids;
 
-    // choice injection
+    // inject our icecream flavors for fake users to fake vote on
     {
         let pool = pool.clone();
         let conn = pool.get().unwrap();
@@ -368,18 +430,20 @@ fn populate_icecream(row_count: u32) -> Result<(), Box<dyn Error>> {
             .into_iter()
             .map(|choice| {
                 let c_type = "text".to_string();
-                let choice_struct = create_choice(&conn, question_id, &c_type, choice);
+                let choice_struct = choices::create(&conn, question_id, &c_type, choice);
                 choice_struct.id
             })
             .collect();
     }
 
-    populate_icecream_votes(&pool, &usernames, &choice_ids, &bar)?;
+    // populate fake votes with our newly created fake users
+    votes::populate_icecream(&pool, &usernames, &choice_ids, &bar)?;
     bar.finish();
     println!("\r\n             🐦 Birdseed has Finished Seeding! 🐦\r\n",);
     Ok(())
 }
 
+// Runs migrations based on the database passed in (main, test or all)
 fn migrate(database: &str) -> Result<(), Box<dyn Error>> {
     // get the base url and append it with the db name
     dotenv().ok();
@@ -404,6 +468,7 @@ fn migrate(database: &str) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+// Runs migrations on the main database.
 fn migrate_main(base_url: &String) -> Result<(), Box<dyn Error>> {
     env::set_var("DATABASE_URL", &format!("{}{}", base_url, "libellis"));
 
@@ -415,6 +480,7 @@ fn migrate_main(base_url: &String) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+// Runs migrations on the test database.
 fn migrate_test(base_url: &String) -> Result<(), Box<dyn Error>> {
     env::set_var("DATABASE_URL", &format!("{}{}", base_url, "libellis_test"));
 
@@ -440,7 +506,7 @@ fn clear_all() -> Result<(), Box<dyn Error>> {
 
     println!("\r\n                  🐦 Clearing all Tables 🐦\r\n");
 
-    let bar = ProgressBar::new(5);
+    let bar = ProgressBar::new(7);
     bar.set_style(
         ProgressStyle::default_bar()
             .template("[{elapsed_precise}] {bar:40.cyan/blue} {msg}")
@@ -448,6 +514,8 @@ fn clear_all() -> Result<(), Box<dyn Error>> {
     );
 
     diesel::delete(votes::table).execute(&conn)?;
+    bar.inc(1);
+    diesel::delete(fences::table).execute(&conn)?;
     bar.inc(1);
     diesel::delete(choices::table).execute(&conn)?;
     bar.inc(1);
@@ -472,32 +540,33 @@ fn clear_all() -> Result<(), Box<dyn Error>> {
 // ALL regardless so we are ready for a rebuild.  This takes care of situations
 // where a user has manually deleted some but not all of their tables. Open a PR
 // request if you have a better solution in mind.
+#[allow(unused_must_use)]
 fn drop_all(conn: &PgConnection) {
-    let bar = ProgressBar::new(9);
+    let drop_statements = vec![
+        "DROP VIEW users_votes",
+        "DROP TABLE votes",
+        "DROP TABLE fences cascade",
+        "DROP EXTENSION postgis",
+        "DROP TABLE choices",
+        "DROP TABLE questions",
+        "DROP TABLE surveys",
+        "DROP TABLE categories",
+        "DROP TABLE users",
+        "DROP TABLE __diesel_schema_migrations",
+    ];
+
+    let bar = ProgressBar::new(drop_statements.len() as u64);
     bar.set_style(
         ProgressStyle::default_bar()
             .template("[{elapsed_precise}] {bar:40.cyan/blue} {msg}")
             .progress_chars("##-"),
     );
 
-    conn.execute("DROP TABLE fences cascade");
-    bar.inc(1);
-    conn.execute("DROP VIEW users_votes");
-    bar.inc(1);
-    conn.execute("DROP TABLE votes");
-    bar.inc(1);
-    conn.execute("DROP TABLE choices");
-    bar.inc(1);
-    conn.execute("DROP TABLE questions");
-    bar.inc(1);
-    conn.execute("DROP TABLE surveys");
-    bar.inc(1);
-    conn.execute("DROP TABLE categories");
-    bar.inc(1);
-    conn.execute("DROP TABLE users");
-    bar.inc(1);
-    conn.execute("DROP TABLE __diesel_schema_migrations");
-    bar.inc(1);
+    drop_statements.iter().for_each(|statement| {
+        conn.execute(statement);
+        bar.inc(1);
+    });
+
     bar.finish();
 }
 
@@ -525,6 +594,7 @@ fn rebuild(database: &str) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+// Drops all tables in the main database and rebuilds them by running embedded migrations
 fn rebuild_main(base_url: &str) -> Result<(), Box<dyn Error>> {
     std::env::set_var("DATABASE_URL", &format!("{}{}", base_url, "libellis"));
     println!("\r\n                🐦 Connecting to Main DB 🐦\r\n");
@@ -537,6 +607,7 @@ fn rebuild_main(base_url: &str) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+// Drops all tables in the test database and rebuilds them by running embedded migrations
 fn rebuild_test(base_url: &str) -> Result<(), Box<dyn Error>> {
     std::env::set_var("DATABASE_URL", &format!("{}{}", base_url, "libellis_test"));
     println!("\r\n                🐦 Connecting to Test DB 🐦\r\n");
@@ -549,398 +620,15 @@ fn rebuild_test(base_url: &str) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-// Populates users table with row_count random users
-fn populate_users(
-    pool: &Pool,
-    row_count: u32,
-    bar: &ProgressBar,
-) -> Result<Vec<String>, Box<dyn Error>> {
-    bar.set_message(&format!("Seeding {} users", row_count));
-
-    let usernames: Vec<String> = (0..row_count)
-        .into_par_iter()
-        .map(|_| {
-            let pool = pool.clone();
-
-            let conn = pool.get().unwrap();
-
-            let user = format!(
-                "{}{}",
-                fake!(Internet.user_name),
-                fake!(Number.between(90, 9999))
-            );
-            let pw = format!(
-                "{}{}",
-                fake!(Name.name),
-                fake!(Number.between(10000, 99999))
-            );
-            let em = format!("{}@gmail.com", user);
-            let first = format!("{}", fake!(Name.first_name));
-            let last = format!("{}", fake!(Name.last_name));
-
-            create_user(&conn, &user, &pw, &em, &first, &last);
-            bar.inc(1);
-
-            user
-        })
-        .collect();
-
-    Ok(usernames)
-}
-
-// TODO: UPDATE THIS TO POPULATE RANDOM CHOICES
-fn populate_categories(
-    pool: &Pool,
-    title: &str,
-    bar: &ProgressBar,
-) -> Result<String, Box<dyn Error>> {
-    bar.set_message(&format!("Seeding 1 Test Category"));
-
-    let pool = pool.clone();
-    let conn = pool.get().unwrap();
-
-    create_category(&conn, title);
-
-    Ok(title.to_string())
-}
-
-// Populates surveys table with row_count random surveys making sure each survey is being created
-// by an existing user
-fn populate_surveys(
-    pool: &Pool,
-    authors: &Vec<String>,
-    row_count: u32,
-    bar: &ProgressBar,
-) -> Result<Vec<i32>, Box<dyn Error>> {
-    bar.set_message(&format!("Seeding {} surveys", row_count));
-
-    let survey_ids: Vec<i32> = authors
-        .par_iter()
-        .map(|auth| {
-            let pool = pool.clone();
-            let conn = pool.get().unwrap();
-
-            let survey_title = format!("{}", fake!(Lorem.sentence(4, 8)));
-
-            // TODO: Change this later to not be a static category field
-            let cat = "TestCategory";
-
-            let survey = create_survey(&conn, &auth, &survey_title, cat);
-            bar.inc(1);
-
-            survey.id
-        })
-        .collect();
-
-    Ok(survey_ids)
-}
-
-// Populates questions table with row_count random questions ensuring that each question relates to
-// an existing survey
-fn populate_questions(
-    pool: &Pool,
-    survey_ids: &Vec<i32>,
-    row_count: u32,
-    bar: &ProgressBar,
-) -> Result<Vec<i32>, Box<dyn Error>> {
-    bar.set_message(&format!("Seeding {} questions", row_count));
-
-    let question_ids: Vec<i32> = survey_ids
-        .par_iter()
-        .map(|s_id| {
-            let pool = pool.clone();
-            let conn = pool.get().unwrap();
-
-            let q_title = format!("{}", fake!(Lorem.sentence(3, 7)));
-            let q_type = "multiple".to_string();
-            let question = create_question(&conn, *s_id, &q_type, &q_title);
-            bar.inc(1);
-
-            question.id
-        })
-        .collect();
-
-    Ok(question_ids)
-}
-
-// Populates choices table with row_count * 4 random choices ensuring that each question relates to
-// an existing survey
-fn populate_choices(
-    pool: &Pool,
-    question_ids: &Vec<i32>,
-    row_count: u32,
-    bar: &ProgressBar,
-) -> Result<Vec<i32>, Box<dyn Error>> {
-    bar.set_message(&format!("Seeding {} choices", (row_count * 4)));
-
-    let choice_ids: Vec<i32> = question_ids
-        .par_iter()
-        .map(|q_id| {
-            // For each question, inject 4 random text choices
-            (0..4)
-                .into_par_iter()
-                .map(|_| {
-                    let pool = pool.clone();
-                    let conn = pool.get().unwrap();
-
-                    let c_title = format!("{}", fake!(Lorem.sentence(1, 4)));
-                    let c_type = "text".to_string();
-                    let choice = create_choice(&conn, *q_id, &c_type, &c_title);
-                    bar.inc(1);
-                    choice.id
-                })
-                .collect()
-        })
-        .collect::<Vec<Vec<i32>>>()
-        .concat();
-
-    Ok(choice_ids)
-}
-
-// Populates the votes table with real votes from our newly inserted random users who vote on
-// choices in a semi-randomish way (not that random really)
-fn populate_votes(
-    pool: &Pool,
-    authors: &Vec<String>,
-    choice_ids: &Vec<i32>,
-    bar: &ProgressBar,
-) -> Result<(), Box<dyn Error>> {
-    bar.set_message(&format!("{} users are voting", (authors.len())));
-
-    // Create vectors of idx and shuffle them
-    let mut rng = thread_rng();
-    let mut choice_idxs: Vec<usize> = (0..choice_ids.len()).collect();
-    let choice_slice: &mut [usize] = &mut choice_idxs;
-    let mut author_idxs: Vec<usize> = (0..authors.len()).collect();
-    let author_slice: &mut [usize] = &mut author_idxs;
-    choice_slice.shuffle(&mut rng);
-    author_slice.shuffle(&mut rng);
-
-    // For each round up randomize the choice and the author voting
-    // on the choice
-    author_slice.par_iter().enumerate().for_each(|(i, rand_i)| {
-        let name = &authors[*rand_i];
-
-        if i < authors.len() - 1 {
-            (1..5 as usize).into_par_iter().for_each(|j| {
-                let pool = pool.clone();
-                let conn = pool.get().unwrap();
-
-                let c_id = choice_ids[choice_slice[(i + 1) * j]];
-
-                // placeholder - randomize later
-                let geo_pnt: GeogPoint = gen_rand_geo();
-
-                let fence_tit = "Nob Hill";
-
-                create_vote(&conn, c_id, name, 1, geo_pnt, fence_tit);
-                bar.inc(1);
-            });
-        }
-    });
-
-    Ok(())
-}
-
-#[derive(Copy, Clone, Debug)]
-pub struct GeoBox {
-    pub x_range: (f64, f64),
-    pub y_range: (f64, f64),
-}
-
-use rand::Rng;
-
-fn gen_rand_geo() -> GeogPoint {
-    let mut rng = rand::thread_rng();
-    let box1 = GeoBox {
-        x_range: (-122.4378204345703, -122.40348815917969),
-        y_range: (37.77831314799669, 37.80381638220768),
-    };
-
-    let box2 = GeoBox {
-        x_range: (-122.50579833984375, -122.39250183105467),
-        y_range: (37.74248523826606, 37.783740105227224),
-    };
-
-    let boxes: Vec<GeoBox> = vec![box1, box2];
-
-    // generate random number between 0 and 1 and round to figure out which index to pick
-    // then generate random ranges between the bounds for that box and return a new GeogPoint
-    let index_choice = rng.gen::<f64>().round() as usize;
-    let choosen_box = boxes[index_choice].clone();
-
-    let mut rng1 = rand::thread_rng();
-    let mut rng2 = rand::thread_rng();
-    GeogPoint {
-        x: rng1.gen_range(choosen_box.x_range.0, choosen_box.x_range.1),
-        y: rng2.gen_range(choosen_box.y_range.0, choosen_box.y_range.1),
-        srid: Some(4326),
-    }
-}
-
-fn populate_icecream_votes(
-    pool: &Pool,
-    authors: &Vec<String>,
-    choice_ids: &Vec<i32>,
-    bar: &ProgressBar,
-) -> Result<(), Box<dyn Error>> {
-    bar.set_message(&format!("{} users are voting", (authors.len())));
-
-    authors.par_iter().for_each(|author| {
-        let mut rng = thread_rng();
-        let pool = pool.clone();
-        let conn = pool.get().unwrap();
-
-        let c_id = choice_ids[rng.gen_range(0, 3) as usize];
-
-        // placeholder - randomize later
-        let geo_pnt: GeogPoint = gen_rand_geo();
-
-        let fence_tit = "Nob Hill";
-
-        create_vote(&conn, c_id, author, 1, geo_pnt, fence_tit);
-        bar.inc(1);
-    });
-
-    Ok(())
-}
-
 // Establishes a connection to the libellis postgres database on your machine, as specified by your
 // DATABASE_URL environment variable. Returns a single PgConnection
+//
+// Likely don't need this farther down the road once all functions have been re-factored to use
+// a pool.
 fn establish_connection() -> PgConnection {
     dotenv().ok();
 
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
 
     PgConnection::establish(&database_url).expect(&format!("Error connecting to {}", database_url))
-}
-
-// Establishes a connection to the libellis postgres database on your machine, as specified by your
-// DATABASE_URL environment variable. Returns a Pool
-fn generate_pool() -> Pool {
-    dotenv().ok();
-
-    let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-
-    pg_pool::init(&database_url)
-}
-
-/**
- * The following series of functions are very simple - each one simply creates a single
- * user/survey/question/choice/vote
- */
-fn create_user<'a>(
-    conn: &PgConnection,
-    user: &'a str,
-    pw: &'a str,
-    em: &'a str,
-    first: &'a str,
-    last: &'a str,
-) -> User {
-    use self::schema::users;
-
-    let new_user = NewUser {
-        username: user,
-        password: pw,
-        email: em,
-        first_name: first,
-        last_name: last,
-        is_admin: false,
-    };
-
-    diesel::insert_into(users::table)
-        .values(&new_user)
-        .get_result(conn)
-        .expect("Error saving new user")
-}
-
-fn create_survey<'a>(
-    conn: &PgConnection,
-    auth: &'a str,
-    survey_title: &'a str,
-    cat: &'a str,
-) -> Survey {
-    use self::schema::surveys;
-
-    let new_survey = NewSurvey {
-        author: auth,
-        title: survey_title,
-        published: true,
-        category: cat,
-    };
-
-    diesel::insert_into(surveys::table)
-        .values(&new_survey)
-        .get_result(conn)
-        .expect("Error saving new survey")
-}
-
-fn create_question<'a>(
-    conn: &PgConnection,
-    s_id: i32,
-    q_type: &'a str,
-    q_title: &'a str,
-) -> Question {
-    use self::schema::questions;
-
-    let new_question = NewQuestion {
-        survey_id: s_id,
-        question_type: q_type,
-        title: q_title,
-    };
-
-    diesel::insert_into(questions::table)
-        .values(&new_question)
-        .get_result(conn)
-        .expect("Error saving new question")
-}
-
-fn create_choice<'a>(conn: &PgConnection, q_id: i32, c_type: &'a str, c_title: &'a str) -> Choice {
-    use self::schema::choices;
-
-    let new_choice = NewChoice {
-        question_id: q_id,
-        content_type: c_type,
-        title: c_title,
-    };
-
-    diesel::insert_into(choices::table)
-        .values(&new_choice)
-        .get_result(conn)
-        .expect("Error saving new choice")
-}
-
-fn create_vote<'a>(
-    conn: &PgConnection,
-    c_id: i32,
-    name: &'a str,
-    points: i32,
-    geo_pnt: GeogPoint,
-    fence_tit: &'a str,
-) -> Vote {
-    use self::schema::votes;
-
-    let new_vote = NewVote {
-        choice_id: c_id,
-        username: name,
-        score: points,
-        geo: geo_pnt,
-        fence_title: fence_tit,
-    };
-
-    diesel::insert_into(votes::table)
-        .values(&new_vote)
-        .get_result(conn)
-        .expect("Error saving new vote")
-}
-
-fn create_category<'a>(conn: &PgConnection, title: &'a str) -> Category {
-    use self::schema::categories;
-
-    let new_category = NewCategory { title };
-
-    diesel::insert_into(categories::table)
-        .values(&new_category)
-        .get_result(conn)
-        .expect("Error saving new vote")
 }
