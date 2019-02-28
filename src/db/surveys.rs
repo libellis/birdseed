@@ -9,7 +9,7 @@ use indicatif::ProgressBar;
 
 use crate::pg_pool::Pool;
 
-use crate::models::survey::{NewSurvey, Survey};
+use crate::models::survey::{NewSurvey, Survey, UpdateSurveyData};
 
 /// Populates surveys table with row_count random surveys making sure each survey is being created
 /// by an existing user.
@@ -42,6 +42,36 @@ pub fn populate(
     Ok(survey_ids)
 }
 
+/// Gets a single survey from the database by the given survey id.
+pub fn get(conn: &PgConnection, survey_id: i32) -> Result<Survey, diesel::result::Error> {
+    use crate::schema::surveys::dsl::*;
+
+    surveys.find(survey_id).first(conn)
+}
+
+/// Gets all surveys filtered by a search parameter
+pub fn get_all(
+    conn: &PgConnection,
+    search: Option<String>,
+) -> Result<Vec<Survey>, diesel::result::Error> {
+    use crate::schema::surveys::dsl::*;
+
+    match search {
+        Some(s) => {
+            let fuzzy_s = format!("%{}%", s);
+            surveys
+                .filter(
+                    author
+                        .ilike(&fuzzy_s)
+                        .or(title.ilike(&fuzzy_s).or(description.ilike(&fuzzy_s))),
+                )
+                .filter(published.eq(true))
+                .get_results(conn)
+        }
+        None => surveys.filter(published.eq(true)).get_results(conn),
+    }
+}
+
 /// Creates a single survey in the database for the given author (user).
 pub fn create<'a>(
     conn: &PgConnection,
@@ -64,9 +94,21 @@ pub fn create<'a>(
         .expect("Error saving new survey")
 }
 
-/// Gets a single survey from the database by the given survey id.
-pub fn get(conn: &PgConnection, survey_id: i32) -> Result<Survey, diesel::result::Error> {
+/// Updates a survey based on optional fields it receives from a patch route.
+pub fn update(conn: &PgConnection, survey_id: i32, data: UpdateSurveyData) -> Survey {
     use crate::schema::surveys::dsl::*;
 
-    surveys.find(survey_id).first(conn)
+    diesel::update(surveys.filter(id.eq(survey_id)))
+        .set(&data)
+        .get_result(conn)
+        .expect("Error updating survey.")
+}
+
+/// Deletes a survey based on a survey id.
+pub fn delete(conn: &PgConnection, survey_id: i32) -> Result<(), Box<dyn Error>> {
+    use crate::schema::surveys::dsl::*;
+
+    diesel::delete(surveys.filter(id.eq(survey_id))).execute(conn)?;
+
+    Ok(())
 }
