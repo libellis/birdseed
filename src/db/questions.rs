@@ -39,6 +39,20 @@ pub fn populate(
     Ok(question_ids)
 }
 
+/// Gets a single question from the database by the given question id.
+pub fn get(conn: &PgConnection, question_id: i32) -> Result<Question, diesel::result::Error> {
+    use crate::schema::questions::dsl::*;
+
+    questions.find(question_id).first(conn)
+}
+
+/// Gets all questions by a survey id
+pub fn get_all(conn: &PgConnection, s_id: i32) -> Result<Vec<Question>, diesel::result::Error> {
+    use crate::schema::questions::dsl::*;
+
+    questions.filter(survey_id.eq(s_id)).get_results(conn)
+}
+
 /// Creates a single question for the given survey id in the database
 pub fn create<'a>(conn: &PgConnection, s_id: i32, q_type: &'a str, q_title: &'a str) -> Question {
     use crate::schema::questions;
