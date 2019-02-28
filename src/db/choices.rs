@@ -9,7 +9,7 @@ use indicatif::ProgressBar;
 
 use crate::pg_pool::Pool;
 
-use crate::models::choice::{Choice, NewChoice};
+use crate::models::choice::{Choice, NewChoice, UpdateChoiceData};
 
 /// Populates the database with fake choices
 pub fn populate(
@@ -44,6 +44,20 @@ pub fn populate(
     Ok(choice_ids)
 }
 
+/// Gets a single choices from the database by the given choice id.
+pub fn get(conn: &PgConnection, choice_id: i32) -> Result<Choice, diesel::result::Error> {
+    use crate::schema::choices::dsl::*;
+
+    choices.find(choice_id).first(conn)
+}
+
+/// Gets all surveys filtered by a search parameter
+pub fn get_all(conn: &PgConnection) -> Result<Vec<Choice>, diesel::result::Error> {
+    use crate::schema::choices::dsl::*;
+
+    choices.get_results(conn)
+}
+
 /// Creates a single choice (for a given question) in the database.
 pub fn create<'a>(conn: &PgConnection, q_id: i32, c_type: &'a str, c_title: &'a str) -> Choice {
     use crate::schema::choices;
@@ -58,4 +72,23 @@ pub fn create<'a>(conn: &PgConnection, q_id: i32, c_type: &'a str, c_title: &'a 
         .values(&new_choice)
         .get_result(conn)
         .expect("Error saving new choice")
+}
+
+/// Updates a choice based on optional fields it receives from a patch route.
+pub fn update(conn: &PgConnection, choice_id: i32, data: UpdateChoiceData) -> Choice {
+    use crate::schema::choices::dsl::*;
+
+    diesel::update(choices.filter(id.eq(choice_id)))
+        .set(&data)
+        .get_result(conn)
+        .expect("Error updating choice.")
+}
+
+/// Deletes a choice based on a choice id.
+pub fn delete(conn: &PgConnection, choice_id: i32) -> Result<(), Box<dyn Error>> {
+    use crate::schema::choices::dsl::*;
+
+    diesel::delete(choices.filter(id.eq(choice_id))).execute(conn)?;
+
+    Ok(())
 }
