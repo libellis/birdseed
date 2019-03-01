@@ -279,9 +279,6 @@ pub enum Birdseed {
 /// `run` will take in a Birdseed enum config (parsed in `main`) and either clear all tables or
 /// populate all tables with number of rows specified in -r (1000 by default)
 pub fn run(config: Birdseed) -> Result<(), Box<dyn Error>> {
-    // test line
-    votes::print();
-
     match config {
         Birdseed::Feed { row_count } => populate_all(row_count),
         Birdseed::Rebuild { db } => rebuild(&db),

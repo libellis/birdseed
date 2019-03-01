@@ -185,6 +185,7 @@ pub fn get_all(
         .inner_join(choices.inner_join(questions))
         .select((sql::<Integer>("sum(score) AS votes"), c_title, q_title))
         .filter(q_id.eq(ques_id))
+        .order(sql::<Integer>("votes").desc())
         .load(conn)?;
 
     Ok(results
