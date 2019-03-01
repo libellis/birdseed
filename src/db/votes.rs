@@ -146,6 +146,33 @@ pub fn get_fence_by_coords(conn: &PgConnection, coords: Value) -> Result<String,
     Ok(fence)
 }
 
+/// Returns a vote by username and choice id
+pub fn get<'a>(conn: &PgConnection, user: &'a str, c_id: i32) -> Result<Vote, diesel::result::Error> {
+    use crate::schema::votes::dsl::*;
+
+    votes.filter(username.eq(user)).filter(choice_id.eq(c_id)).first(conn)
+}
+
+// NOTE: Fundamental problem with get_all is that we are renaming so many fields and creating so
+// many custom titles that it won't fit within the constraints of our Vote model - and by that
+// logic it's not actaully returning votes anyways.  Should this be a view?
+
+// /// Returns all votes by a question id
+// pub fn get_all(
+//     conn: &PgConnection,
+//     ques_id: i32,
+// ) -> Result<Vec<Vote>, diesel::result::Error> {
+//     use crate::schema::choices::dsl::*;
+//     use crate::schema::votes::dsl::*;
+//     use crate::schema::questions::dsl::*;
+//     use crate::schema::questions;
+//     use crate::schema::choices;
+//     use crate::schema::choices::dsl::id as q_id;
+//     use diesel::dsl::sum;
+
+//     questions.inner_join(choices).select((sum(score), questions::dsl::title, choices::dsl::title)).filter(q_id.eq(ques_id)).get_results(conn)
+// }
+
 /// Casts a single vote in the database for the user (name) supplied
 pub fn create<'a>(
     conn: &PgConnection,
@@ -169,4 +196,15 @@ pub fn create<'a>(
         .values(&new_vote)
         .get_result(conn)
         .expect("Error saving new vote")
+}
+
+// No update because we decided that you should not be able to change a vote after it's been cast
+
+/// Deletes a vote based on a choice id and username.
+pub fn delete<'a>(conn: &PgConnection, c_id: i32, user: &'a str) -> Result<(), Box<dyn Error>> {
+    use crate::schema::votes::dsl::*;
+
+    diesel::delete(votes.filter(choice_id.eq(c_id)).filter(username.eq(user))).execute(conn)?;
+
+    Ok(())
 }
