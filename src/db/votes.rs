@@ -147,31 +147,55 @@ pub fn get_fence_by_coords(conn: &PgConnection, coords: Value) -> Result<String,
 }
 
 /// Returns a vote by username and choice id
-pub fn get<'a>(conn: &PgConnection, user: &'a str, c_id: i32) -> Result<Vote, diesel::result::Error> {
+pub fn get<'a>(
+    conn: &PgConnection,
+    user: &'a str,
+    c_id: i32,
+) -> Result<Vote, diesel::result::Error> {
     use crate::schema::votes::dsl::*;
 
-    votes.filter(username.eq(user)).filter(choice_id.eq(c_id)).first(conn)
+    votes
+        .filter(username.eq(user))
+        .filter(choice_id.eq(c_id))
+        .first(conn)
 }
 
-// NOTE: Fundamental problem with get_all is that we are renaming so many fields and creating so
-// many custom titles that it won't fit within the constraints of our Vote model - and by that
-// logic it's not actaully returning votes anyways.  Should this be a view?
+/// Provides structure for an aggregate vote result for a single choice.
+pub struct VoteResult {
+    pub score: i32,
+    pub question_title: String,
+    pub choice_title: String,
+}
 
-// /// Returns all votes by a question id
-// pub fn get_all(
-//     conn: &PgConnection,
-//     ques_id: i32,
-// ) -> Result<Vec<Vote>, diesel::result::Error> {
-//     use crate::schema::choices::dsl::*;
-//     use crate::schema::votes::dsl::*;
-//     use crate::schema::questions::dsl::*;
-//     use crate::schema::questions;
-//     use crate::schema::choices;
-//     use crate::schema::choices::dsl::id as q_id;
-//     use diesel::dsl::sum;
+/// Returns an array of vote results for all choices of a given question (by question id).
+pub fn get_all(
+    conn: &PgConnection,
+    ques_id: i32,
+) -> Result<Vec<VoteResult>, diesel::result::Error> {
+    use crate::schema::choices::dsl::title as c_title;
+    use crate::schema::choices::dsl::*;
+    use crate::schema::questions::dsl::id as q_id;
+    use crate::schema::questions::dsl::title as q_title;
+    use crate::schema::questions::dsl::*;
+    use crate::schema::votes::dsl::*;
+    use diesel::dsl::sql;
+    use diesel::sql_types::Integer;
 
-//     questions.inner_join(choices).select((sum(score), questions::dsl::title, choices::dsl::title)).filter(q_id.eq(ques_id)).get_results(conn)
-// }
+    let results: Vec<(i32, String, String)> = votes
+        .inner_join(choices.inner_join(questions))
+        .select((sql::<Integer>("sum(score) AS votes"), c_title, q_title))
+        .filter(q_id.eq(ques_id))
+        .load(conn)?;
+
+    Ok(results
+        .into_iter()
+        .map(|result| VoteResult {
+            score: result.0,
+            question_title: result.1,
+            choice_title: result.2,
+        })
+        .collect())
+}
 
 /// Casts a single vote in the database for the user (name) supplied
 pub fn create<'a>(
