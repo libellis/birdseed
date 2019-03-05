@@ -5,6 +5,8 @@ use std::error::Error;
 
 use rayon::prelude::*;
 
+use rand::Rng;
+
 use indicatif::ProgressBar;
 
 use crate::pg_pool::Pool;
@@ -16,6 +18,7 @@ use crate::models::survey::{NewSurvey, Survey, UpdateSurveyData};
 pub fn populate(
     pool: &Pool,
     authors: &Vec<String>,
+    categories: &Vec<String>,
     row_count: u32,
     bar: &ProgressBar,
 ) -> Result<Vec<i32>, Box<dyn Error>> {
@@ -26,13 +29,14 @@ pub fn populate(
         .map(|auth| {
             let pool = pool.clone();
             let conn = pool.get().unwrap();
+            let mut rng = rand::thread_rng();
 
             let survey_title = format!("{}", fake!(Lorem.sentence(4, 8)));
 
             // TODO: Change this later to not be a static category field
-            let cat = "TestCategory";
+            let cat = categories[rng.gen_range(0, row_count-1) as usize];
 
-            let survey = create(&conn, &auth, &survey_title, cat);
+            let survey = create(&conn, &auth, &survey_title, &cat);
             bar.inc(1);
 
             survey.id
