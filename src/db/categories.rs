@@ -21,7 +21,7 @@ pub fn populate(pool: &Pool, row_count: u32, bar: &ProgressBar) -> Result<Vec<St
             let pool = pool.clone();
             let conn = pool.get().unwrap();
 
-            let title = format!("{}", fake!(Lorem.word));
+            let title = format!("{}{}{}", fake!(Lorem.word), fake!(Number.between(9, 9999)), fake!(Lorem.word));
             create(&conn, &title);
             title
         })
