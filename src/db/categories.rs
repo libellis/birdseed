@@ -5,23 +5,31 @@ use indicatif::ProgressBar;
 use std::error::Error;
 
 use crate::pg_pool::Pool;
+use rayon::prelude::*;
 
 use crate::models::category::{Category, NewCategory};
 
 /// Not Complete: Will soon seed random categories - for now
 /// seeds a single given category.
-// TODO: UPDATE THIS TO POPULATE RANDOM CHOICES
-pub fn populate(pool: &Pool, title: &str, bar: &ProgressBar) -> Result<String, Box<dyn Error>> {
-    bar.set_message(&format!("Seeding 1 Test Category"));
+pub fn populate(pool: &Pool, row_count: i32, bar: &ProgressBar) -> Result<Vec<String>, Box<dyn Error>> {
+    bar.set_message(&format!("Seeding {} categories", row_count));
 
-    let pool = pool.clone();
-    let conn = pool.get().unwrap();
 
-    create(&conn, title);
+    let categories: Vec<String> = (0..row_count)
+        .into_par_iter()
+        .map(|_| {
+            let pool = pool.clone();
+            let conn = pool.get().unwrap();
 
-    Ok(title.to_string())
+            let title = format!("{}", fake!(Lorem.word));
+            create(&conn, &title);
+            title
+        })
+        .collect();
+
+
+    Ok(categories)
 }
-
 
 /// Gets a single category from the database by the given category title(PK).
 pub fn get<'a>(conn: &PgConnection, category_title: &'a str) -> Result<Category, diesel::result::Error> {
