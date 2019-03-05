@@ -50,6 +50,13 @@ pub fn populate(
     Ok(usernames)
 }
 
+/// Gets a single user from the database by the given username (PK).
+pub fn get<'a>(conn: &PgConnection, user: &'a str) -> Result<User, diesel::result::Error> {
+    use crate::schema::users::dsl::*;
+
+    users.find(user).first(conn)
+}
+
 /// Gets all users
 pub fn get_all(conn: &PgConnection) -> Result<Vec<User>, diesel::result::Error> {
     use crate::schema::users::dsl::*;
