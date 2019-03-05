@@ -33,10 +33,9 @@ pub fn populate(
 
             let survey_title = format!("{}", fake!(Lorem.sentence(4, 8)));
 
-            // TODO: Change this later to not be a static category field
-            let cat = categories[rng.gen_range(0, row_count-1) as usize];
+            let cat = &categories[rng.gen_range(0, row_count-1) as usize];
 
-            let survey = create(&conn, &auth, &survey_title, &cat);
+            let survey = create(&conn, &auth, &survey_title, cat);
             bar.inc(1);
 
             survey.id
