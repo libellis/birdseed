@@ -15,3 +15,10 @@ pub struct NewQuestion<'a> {
     pub question_type: &'a str,
     pub title: &'a str,
 }
+
+#[derive(Deserialize, AsChangeset, Default, Clone)]
+#[table_name = "questions"]
+pub struct UpdateQuestionData {
+    title: Option<String>,
+    question_type: Option<String>,
+}

@@ -3,11 +3,12 @@ use diesel::prelude::*;
 
 use std::error::Error;
 
+use bcrypt;
 use rayon::prelude::*;
 
 use indicatif::ProgressBar;
 
-use crate::models::user::{NewUser, User};
+use crate::models::user::{NewUser, UpdateUserData, User};
 use crate::Pool;
 
 /// Populates users table with row_count random users.
@@ -49,6 +50,20 @@ pub fn populate(
     Ok(usernames)
 }
 
+/// Gets a single user from the database by the given username (PK).
+pub fn get<'a>(conn: &PgConnection, user: &'a str) -> Result<User, diesel::result::Error> {
+    use crate::schema::users::dsl::*;
+
+    users.find(user).first(conn)
+}
+
+/// Gets all users
+pub fn get_all(conn: &PgConnection) -> Result<Vec<User>, diesel::result::Error> {
+    use crate::schema::users::dsl::*;
+
+    users.load(conn)
+}
+
 /// Creates a single user in the database WITHOUT hashing the password (for quickly seeding junk
 /// users).
 pub fn create<'a>(
@@ -74,4 +89,31 @@ pub fn create<'a>(
         .values(&new_user)
         .get_result(conn)
         .expect("Error saving new user")
+}
+
+pub fn hash_password<'a>(password: &'a str) -> String {
+    bcrypt::hash(password, 10).unwrap()
+}
+
+/// Updates a user based on optional fields in a changeset
+pub fn update<'a>(conn: &PgConnection, user: &'a str, mut data: UpdateUserData) -> User {
+    use crate::schema::users::dsl::*;
+
+    if let Some(pw) = data.password {
+        data.password = Some(hash_password(&pw));
+    }
+
+    diesel::update(users.filter(username.eq(user)))
+        .set(&data)
+        .get_result(conn)
+        .expect("Error updating user.")
+}
+
+/// Deletes a user based on their username.
+pub fn delete<'a>(conn: &PgConnection, user: &'a str) -> Result<(), Box<dyn Error>> {
+    use crate::schema::users::dsl::*;
+
+    diesel::delete(users.filter(username.eq(user))).execute(conn)?;
+
+    Ok(())
 }

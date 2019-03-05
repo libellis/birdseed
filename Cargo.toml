@@ -1,6 +1,6 @@
 [package]
 name = "birdseed"
-version = "0.1.98"
+version = "0.2.0"
 authors = ["Peter Farr <Peter@PrismaPhonic.com>"]
 description = "birdseed enables you to seed a libellis database with fake data, clear all tables, or rebuild all tables per the current embedded migrations"
 keywords = ["birdseed", "libellis", "seeding", "database", "postgres"]
@@ -43,3 +43,4 @@ geojson = "0.15.0"
 serde_json = { version = "1.0.38", features = ["preserve_order"] }
 serde = "1.0.88"
 serde_derive = "1.0.88"
+bcrypt = "0.3.0"

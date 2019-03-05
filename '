@@ -271,6 +271,19 @@ pub enum Birdseed {
         db: String,
     },
 
+    #[structopt(name = "dumpschema")]
+    /// Dumps the schema for the database being pointed at into a schema.sql file.
+    DumpSchema {
+        /// Specifies the filename (path) to write to - defaults to schema.sql in the current
+        /// folder
+        #[structopt(short = "f", long = "file", default_value = "schema.sql")]
+        output: String,
+        
+        /// Which database to run output schema from, main, test, or all
+        #[structopt(short = "d", long = "database", default_value = "all")]
+        db: String,
+    },
+
     #[structopt(name = "clear")]
     /// Clears all tables in libellis database
     Clear,
@@ -286,6 +299,7 @@ pub fn run(config: Birdseed) -> Result<(), Box<dyn Error>> {
         Birdseed::Icecream { row_count } => populate_icecream(row_count),
         Birdseed::Fences { filepath } => load_fences(filepath),
         Birdseed::Migrate { db } => migrate(&db),
+        Birdseed::DumpSchema { output, db } => dump_schema( output, &db ),
         Birdseed::Clear => clear_all(),
     }
 }
@@ -319,6 +333,16 @@ fn drop_database(database: &str) {
         .arg(database)
         .output()
         .expect("failed to drop database");
+}
+
+fn dump_schema(output: String, database: &str) -> Result<(), Box<dyn Error>> {
+    Command::new("pgdump")
+        .arg("-s")
+        .arg(database)
+        .arg(">")
+        .arg(output)
+        .output()
+        .expect("pgdump failed");
 }
 
 // Load all the fences stored in a geojson file by supplying a filepath.
@@ -363,9 +387,9 @@ fn populate_all(row_count: u32) -> Result<(), Box<dyn Error>> {
 
     let usernames = users::populate(&pool, row_count, &bar)?;
 
-    let categories = categories::populate(&pool, row_count, &bar)?;
+    let _ = categories::populate(&pool, "TestCategory", &bar)?;
 
-    let survey_ids = surveys::populate(&pool, &usernames, &categories, row_count, &bar)?;
+    let survey_ids = surveys::populate(&pool, &usernames, row_count, &bar)?;
     let question_ids = questions::populate(&pool, &survey_ids, row_count, &bar)?;
     let choice_ids = choices::populate(&pool, &question_ids, row_count, &bar)?;
     votes::populate(&pool, &usernames, &choice_ids, &bar)?;
@@ -397,11 +421,7 @@ fn populate_icecream(row_count: u32) -> Result<(), Box<dyn Error>> {
 
     let usernames = users::populate(&pool, row_count, &bar)?;
 
-    {
-        let pool = pool.clone();
-        let conn = pool.get().unwrap();
-        categories::create(&conn, "food");
-    }
+    let _ = categories::populate(&pool, "food", &bar)?;
 
     let survey_id;
 

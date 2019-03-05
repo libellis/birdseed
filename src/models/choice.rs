@@ -16,3 +16,11 @@ pub struct NewChoice<'a> {
     pub content_type: &'a str,
     pub title: &'a str,
 }
+
+#[derive(Deserialize, AsChangeset, Default, Clone)]
+#[table_name = "choices"]
+pub struct UpdateChoiceData {
+    content: Option<String>,
+    content_type: Option<String>,
+    title: Option<String>,
+}

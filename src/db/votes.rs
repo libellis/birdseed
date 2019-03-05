@@ -146,6 +146,58 @@ pub fn get_fence_by_coords(conn: &PgConnection, coords: Value) -> Result<String,
     Ok(fence)
 }
 
+/// Returns a vote by username and choice id
+pub fn get<'a>(
+    conn: &PgConnection,
+    user: &'a str,
+    c_id: i32,
+) -> Result<Vote, diesel::result::Error> {
+    use crate::schema::votes::dsl::*;
+
+    votes
+        .filter(username.eq(user))
+        .filter(choice_id.eq(c_id))
+        .first(conn)
+}
+
+/// Provides structure for an aggregate vote result for a single choice.
+pub struct VoteResult {
+    pub score: i32,
+    pub question_title: String,
+    pub choice_title: String,
+}
+
+/// Returns an array of vote results for all choices of a given question (by question id).
+pub fn get_all(
+    conn: &PgConnection,
+    ques_id: i32,
+) -> Result<Vec<VoteResult>, diesel::result::Error> {
+    use crate::schema::choices::dsl::title as c_title;
+    use crate::schema::choices::dsl::*;
+    use crate::schema::questions::dsl::id as q_id;
+    use crate::schema::questions::dsl::title as q_title;
+    use crate::schema::questions::dsl::*;
+    use crate::schema::votes::dsl::*;
+    use diesel::dsl::sql;
+    use diesel::sql_types::Integer;
+
+    let results: Vec<(i32, String, String)> = votes
+        .inner_join(choices.inner_join(questions))
+        .select((sql::<Integer>("sum(score) AS votes"), c_title, q_title))
+        .filter(q_id.eq(ques_id))
+        .order(sql::<Integer>("votes").desc())
+        .load(conn)?;
+
+    Ok(results
+        .into_iter()
+        .map(|result| VoteResult {
+            score: result.0,
+            question_title: result.1,
+            choice_title: result.2,
+        })
+        .collect())
+}
+
 /// Casts a single vote in the database for the user (name) supplied
 pub fn create<'a>(
     conn: &PgConnection,
@@ -169,4 +221,15 @@ pub fn create<'a>(
         .values(&new_vote)
         .get_result(conn)
         .expect("Error saving new vote")
+}
+
+// No update because we decided that you should not be able to change a vote after it's been cast
+
+/// Deletes a vote based on a choice id and username.
+pub fn delete<'a>(conn: &PgConnection, c_id: i32, user: &'a str) -> Result<(), Box<dyn Error>> {
+    use crate::schema::votes::dsl::*;
+
+    diesel::delete(votes.filter(choice_id.eq(c_id)).filter(username.eq(user))).execute(conn)?;
+
+    Ok(())
 }

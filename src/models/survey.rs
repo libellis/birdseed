@@ -21,3 +21,12 @@ pub struct NewSurvey<'a> {
     pub published: bool,
     pub category: &'a str,
 }
+
+#[derive(Deserialize, AsChangeset, Default, Clone)]
+#[table_name = "surveys"]
+pub struct UpdateSurveyData {
+    title: Option<String>,
+    published: Option<bool>,
+    description: Option<String>,
+    category: Option<String>,
+}
