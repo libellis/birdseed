@@ -363,9 +363,9 @@ fn populate_all(row_count: u32) -> Result<(), Box<dyn Error>> {
 
     let usernames = users::populate(&pool, row_count, &bar)?;
 
-    let _ = categories::populate(&pool, "TestCategory", &bar)?;
+    let categories = categories::populate(&pool, row_count, &bar)?;
 
-    let survey_ids = surveys::populate(&pool, &usernames, row_count, &bar)?;
+    let survey_ids = surveys::populate(&pool, &usernames, &categories, row_count, &bar)?;
     let question_ids = questions::populate(&pool, &survey_ids, row_count, &bar)?;
     let choice_ids = choices::populate(&pool, &question_ids, row_count, &bar)?;
     votes::populate(&pool, &usernames, &choice_ids, &bar)?;
@@ -397,7 +397,11 @@ fn populate_icecream(row_count: u32) -> Result<(), Box<dyn Error>> {
 
     let usernames = users::populate(&pool, row_count, &bar)?;
 
-    let _ = categories::populate(&pool, "food", &bar)?;
+    {
+        let pool = pool.clone();
+        let conn = pool.get().unwrap();
+        categories::create(&conn, "food");
+    }
 
     let survey_id;
 
